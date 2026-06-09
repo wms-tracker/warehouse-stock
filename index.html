@@ -454,34 +454,58 @@ tbody tr:hover{background:#FAFAF8}
 
 <div class="toast-wrap" id="toast-wrap"></div>
 
-<!-- CHART.JS + FIREBASE v8 (classic SDK) -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-
+<!-- APP CODE (defined before CDN scripts so doLogin works immediately) -->
 <script>
-// Firebase init
 var db = null;
+
 function _setStatus(msg, ok) {
   var el = document.getElementById('li-status');
   if(el){ el.textContent = msg; el.style.color = ok===false ? 'var(--co)' : ok===true ? 'var(--tl)' : 'var(--muted)'; }
 }
-try {
-  if (!firebase.apps.length) {
-    firebase.initializeApp({
-      apiKey: "AIzaSyAFB1PyOfl1eY6IN68E04Pi2t2PqmjroEs",
-      authDomain: "warehouse-stock-8ad17.firebaseapp.com",
-      projectId: "warehouse-stock-8ad17",
-      storageBucket: "warehouse-stock-8ad17.firebasestorage.app",
-      messagingSenderId: "736928545848",
-      appId: "1:736928545848:web:946fe8599801e2b6e13acd"
-    });
+
+// Called by firebase-firestore.js onload
+function _initFirebase() {
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp({
+        apiKey: "AIzaSyAFB1PyOfl1eY6IN68E04Pi2t2PqmjroEs",
+        authDomain: "warehouse-stock-8ad17.firebaseapp.com",
+        projectId: "warehouse-stock-8ad17",
+        storageBucket: "warehouse-stock-8ad17.firebasestorage.app",
+        messagingSenderId: "736928545848",
+        appId: "1:736928545848:web:946fe8599801e2b6e13acd"
+      });
+    }
+    db = firebase.firestore();
+    _setStatus('✅ Firebase พร้อม — กรุณาเข้าสู่ระบบ', true);
+    // ถ้า user login ไปแล้วแต่ db ยังไม่พร้อม ให้ start sync ทีหลัง
+    if(curUser && typeof startListeners === 'function') {
+      setSyncStatus('loading');
+      initData().then(function(){startListeners();}).catch(function(){startListeners();});
+    }
+    // Auto-login จาก localStorage
+    if(!curUser) {
+      var _saved = localStorage.getItem('wh_user');
+      var _auto = _saved ? USERS.find(function(x){return x.id===_saved;}) : null;
+      if(_auto) {
+        curUser = _auto;
+        document.getElementById('login-wrap').style.display='none';
+        document.getElementById('app').style.display='block';
+        document.getElementById('ui-user').textContent = _auto.name;
+        var rp2 = document.getElementById('ui-role');
+        rp2.textContent = _auto.role==='admin'?'Admin':'Staff';
+        rp2.className = 'badge '+(_auto.role==='admin'?'b-adj':'b-ok');
+        document.getElementById('rc-d').value = today();
+        document.getElementById('is-d').value = today();
+        fillMonths();
+        setSyncStatus('loading');
+        initData().then(function(){startListeners();}).catch(function(){startListeners();});
+      }
+    }
+  } catch(e) {
+    console.error('Firebase init failed:', e);
+    _setStatus('❌ Firebase error: ' + e.message, false);
   }
-  db = firebase.firestore();
-  _setStatus('✅ Firebase พร้อม — กรุณาเข้าสู่ระบบ', true);
-} catch(e) {
-  console.error('Firebase init failed:', e);
-  _setStatus('❌ Firebase error: ' + e.message, false);
 }
 
 // compat wrappers
@@ -1147,29 +1171,12 @@ window.exportForecastCSV = function() {
 function updClock(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 setInterval(updClock,1000); updClock();
 
-// ===== INIT =====
-(function(){
-  var _saved = localStorage.getItem('wh_user');
-  var _autoUser = _saved ? USERS.find(function(x){return x.id===_saved;}) : null;
-  if(_autoUser) {
-    curUser = _autoUser;
-    document.getElementById('login-wrap').style.display='none';
-    document.getElementById('app').style.display='block';
-    document.getElementById('ui-user').textContent = _autoUser.name;
-    var rp = document.getElementById('ui-role');
-    rp.textContent = _autoUser.role==='admin'?'Admin':'Staff';
-    rp.className = 'badge '+(_autoUser.role==='admin'?'b-adj':'b-ok');
-    document.getElementById('rc-d').value = today();
-    document.getElementById('is-d').value = today();
-    fillMonths();
-    if(db){
-      setSyncStatus('loading');
-      initData().then(function(){startListeners();}).catch(function(){startListeners();});
-    } else {
-      setSyncStatus('err');
-    }
-  }
-})();
+
 </script>
+
+<!-- CDN SCRIPTS (loaded after app code is defined) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js" onload="_initFirebase()"></script>
 </body>
 </html>
