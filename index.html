@@ -538,6 +538,8 @@ var DEF_ITEMS=[
 var db,items=[],txns=[],cats=[],pending=[];
 var curUser=null,rpChart=null,_cb=null,_eid=null;
 var unsubItems=null,unsubTxns=null,unsubCats=null,unsubPending=null;
+var SESSION_TIMEOUT=30*60*1000;
+var _sessionTimer=null,_sessionWarnTimer=null,_sessionWarnEl=null;
 
 function today(){return new Date().toISOString().split('T')[0];}
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
@@ -600,6 +602,29 @@ async function addTxn(t){t.id=genId();t.createdAt=new Date().toISOString();await
 async function addPend(r){r.id=genId();r.createdAt=new Date().toISOString();await db.collection('pending').doc(r.id).set(r);}
 async function delPend(id){await db.collection('pending').doc(id).delete();}
 
+function resetSessionTimer(){
+  if(!curUser)return;
+  if(_sessionTimer)clearTimeout(_sessionTimer);
+  if(_sessionWarnTimer)clearTimeout(_sessionWarnTimer);
+  if(_sessionWarnEl){_sessionWarnEl.remove();_sessionWarnEl=null;}
+  // Warn 2 minutes before timeout
+  _sessionWarnTimer=setTimeout(function(){
+    _sessionWarnEl=document.createElement('div');
+    _sessionWarnEl.id='session-warn';
+    _sessionWarnEl.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#BA7517;color:#fff;padding:12px 20px;border-radius:8px;z-index:9999;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);cursor:pointer';
+    _sessionWarnEl.innerHTML='⚠️ เซสชันจะหมดอายุใน 2 นาที &nbsp;<button onclick="resetSessionTimer()" style="background:#fff;color:#BA7517;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-weight:700">ต่ออายุ</button>';
+    document.body.appendChild(_sessionWarnEl);
+  }, SESSION_TIMEOUT - 2*60*1000);
+  _sessionTimer=setTimeout(function(){
+    if(curUser){toast('หมดเวลาเซสชัน กรุณาเข้าสู่ระบบใหม่','warn');doLogout();}
+  }, SESSION_TIMEOUT);
+}
+function stopSessionTimer(){
+  if(_sessionTimer)clearTimeout(_sessionTimer);
+  if(_sessionWarnTimer)clearTimeout(_sessionWarnTimer);
+  if(_sessionWarnEl){_sessionWarnEl.remove();_sessionWarnEl=null;}
+  _sessionTimer=null;_sessionWarnTimer=null;
+}
 function doLogin(){
   var u=document.getElementById('li-user').value.trim();
   var p=document.getElementById('li-pass').value;
@@ -636,6 +661,7 @@ function doLogin(){
       startAuditListener();
       startUsersListener();
       logAudit('login','เข้าสู่ระบบ: '+user.name,'success');
+      resetSessionTimer();
       setTimeout(checkAlertOnLoad, 2000);
     }).catch(function(e){console.error(e);startListeners();});
   }).catch(function(){
@@ -649,10 +675,11 @@ function doLogin(){
     var rp=document.getElementById('ui-role');rp.textContent=user.role==='admin'?'Admin':'Staff';rp.className='badge '+(user.role==='admin'?'b-adj':'b-ok');
     document.getElementById('rc-d').value=today();document.getElementById('is-d').value=today();
     fillMonths();setSyncSt('load');
-    seedData().then(function(){startListeners();setTimeout(checkAlertOnLoad,2000);}).catch(function(e){console.error(e);startListeners();});
+    seedData().then(function(){startListeners();resetSessionTimer();setTimeout(checkAlertOnLoad,2000);}).catch(function(e){console.error(e);startListeners();resetSessionTimer();});
   });
 }
 function doLogout(){
+  stopSessionTimer();
   logAudit('login','ออกจากระบบ');
   stopListeners();
   if(unsubAudit){unsubAudit();unsubAudit=null;}
@@ -1437,6 +1464,9 @@ loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js')
   });
   document.getElementById('spinner-wrap').style.display='none';
   document.getElementById('login-wrap').style.display='flex';
+  ['mousemove','keydown','click','touchstart','scroll'].forEach(function(ev){
+    document.addEventListener(ev,function(){if(curUser)resetSessionTimer();},{passive:true});
+  });
 })
 .catch(function(){
   document.getElementById('spinner-wrap').innerHTML=
