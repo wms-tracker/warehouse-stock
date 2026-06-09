@@ -651,7 +651,6 @@ function doLogin() {
   const user = USERS.find(x=>x.id===u.trim()&&x.pass===p);
   const errEl = document.getElementById('li-err');
   if(!user){if(errEl){errEl.style.display='block';errEl.style.color='var(--co)';errEl.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';}return;}
-  if(!db){if(errEl){errEl.style.display='block';errEl.style.color='var(--co)';errEl.textContent='❌ Firebase ยังไม่พร้อม กรุณารีเฟรชหน้า';}return;}
   curUser = user;
   localStorage.setItem('wh_user', user.id);
   document.getElementById('login-wrap').style.display='none';
@@ -663,13 +662,12 @@ function doLogin() {
   document.getElementById('rc-d').value = today();
   document.getElementById('is-d').value = today();
   fillMonths();
-  setSyncStatus('loading');
-  initData().then(() => {
-    startListeners();
-  }).catch(e => {
-    console.error('initData error:', e);
-    startListeners();
-  });
+  if(db){
+    setSyncStatus('loading');
+    initData().then(() => startListeners()).catch(e => { console.error(e); startListeners(); });
+  } else {
+    setSyncStatus('err');
+  }
 }
 function doLogout() {
   stopListeners();
@@ -819,6 +817,7 @@ function rReport() {
   const days=new Date(yr,mo,0).getDate();
   const labels=Array.from({length:days},(_,i)=>String(i+1));
   const rd=new Array(days).fill(0),id2=new Array(days).fill(0);
+  f.forEach(t=>{const day=new Date(t.date).getDate()-1;if(day>=0&&day<days){if(t.type==='receive')rd[day]+=t.qty;else if(t.type==='issue')id2[day]+=t.qty;}});
   if(rpChart){ rpChart.destroy(); rpChart=null; }
   document.getElementById('rp-chart-wrap').innerHTML='<canvas id="rp-chart"></canvas>';
   rpChart=new Chart(document.getElementById('rp-chart'),{type:'bar',data:{labels,datasets:[{label:'รับเข้า',data:rd,backgroundColor:'#1D9E75',borderRadius:4},{label:'เบิกออก',data:id2,backgroundColor:'#D85A30',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:true,maxTicksLimit:15,maxRotation:0,font:{size:10,family:'Sarabun'}},grid:{display:false}},y:{ticks:{font:{size:10,family:'Sarabun'}},grid:{color:'rgba(0,0,0,0.04)'}}}}}});
@@ -1187,7 +1186,12 @@ if(_autoUser) {
   document.getElementById('is-d').value = today();
   fillMonths();
   setSyncStatus('loading');
-  initData().then(()=>startListeners()).catch(()=>startListeners());
+  if(db){
+    initData().then(()=>startListeners()).catch(()=>startListeners());
+  } else {
+    setSyncStatus('err');
+    toast('Firebase ไม่พร้อม — ข้อมูลอาจไม่ sync','warn');
+  }
 } else {
   document.getElementById('login-wrap').style.display='flex';
 }
