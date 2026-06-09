@@ -149,14 +149,14 @@ tbody tr:hover{background:#FAFAF8}
 </head>
 <body>
 
-<!-- LOADING -->
-<div class="loading-overlay" id="loading-overlay">
+<!-- LOADING (hidden by default) -->
+<div class="loading-overlay" id="loading-overlay" style="display:none">
   <div class="spinner"></div>
   <span>กำลังเชื่อมต่อ Firebase...</span>
 </div>
 
 <!-- LOGIN -->
-<div id="login-wrap" class="login-wrap" style="display:none">
+<div id="login-wrap" class="login-wrap" style="display:flex">
   <div class="login-card">
     <div class="login-logo">📦</div>
     <div class="login-title">คลังวัสดุสิ้นเปลือง</div>
@@ -453,49 +453,17 @@ tbody tr:hover{background:#FAFAF8}
 
 <div class="toast-wrap" id="toast-wrap"></div>
 
-<!-- FALLBACK: ซ่อน loading ถ้า script โหลดช้า/error -->
-<script>
-const USERS_L=[{id:'admin',name:'ผู้ดูแลระบบ',pass:'admin123',role:'admin'},{id:'staff',name:'พนักงานคลัง',pass:'staff123',role:'staff'}];
-setTimeout(()=>{
-  const o=document.getElementById('loading-overlay');
-  if(o&&o.style.display!=='none'){o.style.display='none';document.getElementById('login-wrap').style.display='flex';}
-},5000);
-function doLogin(){
-  if(window._doLogin){window._doLogin();return;}
-  const u=document.getElementById('li-user').value.trim();
-  const p=document.getElementById('li-pass').value;
-  const user=USERS_L.find(x=>x.id===u&&x.pass===p);
-  const err=document.getElementById('li-err');
-  if(!user){err.style.display='block';err.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}
-  err.style.display='none';
-  err.textContent='⏳ กำลังโหลด Firebase... กรุณารอสักครู่';err.style.display='block';err.style.color='var(--am)';
-  window._pendingLogin={u,p};
-  let tries=0;
-  const wait=setInterval(()=>{
-    tries++;
-    if(window._doLogin){clearInterval(wait);window._doLogin();return;}
-    if(tries>20){clearInterval(wait);err.textContent='❌ Firebase โหลดไม่ได้ กรุณารีเฟรชหน้า';err.style.color='var(--co)';}
-  },500);
-}
-</script>
-
-<!-- CHART.JS -->
+<!-- CHART.JS + FIREBASE COMPAT -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<!-- FIREBASE COMPAT (ไม่ใช้ ESM เพื่อรองรับทุก host) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
 <script>
-(function(){
-// *** ตั้ง _doLogin ก่อนเลย (function hoisting) เพื่อให้ปุ่ม login ทำงานได้แม้ Firebase โหลดช้า ***
-window._doLogin = doLogin;
-window.doLogin = doLogin;
-
-// Firebase init (ครอบ try-catch)
-let db = null;
+// Firebase init
+var db = null;
 try {
-  if (typeof firebase !== 'undefined') {
-    if (!firebase.apps.length) firebase.initializeApp({
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
       apiKey: "AIzaSyAFB1PyOfl1eY6IN68E04Pi2t2PqmjroEs",
       authDomain: "warehouse-stock-8ad17.firebaseapp.com",
       projectId: "warehouse-stock-8ad17",
@@ -503,21 +471,21 @@ try {
       messagingSenderId: "736928545848",
       appId: "1:736928545848:web:946fe8599801e2b6e13acd"
     });
-    db = firebase.firestore();
   }
-} catch(e) { console.warn('Firebase init error:', e); }
+  db = firebase.firestore();
+} catch(e) { console.error('Firebase init failed:', e); }
 
 // compat wrappers
-const collection = (d,c) => d.collection(c);
-const doc = (d,c,id) => d.collection(c).doc(id);
-const setDoc = (ref,data) => ref.set(data);
-const deleteDoc = (ref) => ref.delete();
-const getDocs = (ref) => ref.get();
-const addDoc = (ref,data) => ref.add(data);
-const onSnapshot = (ref,cb,errCb) => ref.onSnapshot(snap=>{cb(snap);},(errCb||((e)=>{})));
-const writeBatch = (d) => d.batch();
-const query = (ref,...args) => { let q=ref; args.forEach(a=>{if(a&&a._type==='orderBy')q=q.orderBy(a.field,a.dir);}); return q; };
-const orderBy = (field,dir='asc') => ({_type:'orderBy',field,dir});
+function collection(d,c){ return d.collection(c); }
+function doc(d,c,id){ return d.collection(c).doc(id); }
+function setDoc(ref,data){ return ref.set(data); }
+function deleteDoc(ref){ return ref.delete(); }
+function getDocs(ref){ return ref.get(); }
+function addDoc(ref,data){ return ref.add(data); }
+function onSnapshot(ref,cb,errCb){ return ref.onSnapshot(cb, errCb||function(){}); }
+function writeBatch(d){ return d.batch(); }
+function query(ref){ var q=ref; for(var i=1;i<arguments.length;i++){var a=arguments[i];if(a&&a._type==='orderBy')q=q.orderBy(a.field,a.dir);} return q; }
+function orderBy(field,dir){ return {_type:'orderBy',field:field,dir:dir||'asc'}; }
 
 const MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const USERS = [{id:'admin',name:'ผู้ดูแลระบบ',pass:'admin123',role:'admin'},{id:'staff',name:'พนักงานคลัง',pass:'staff123',role:'staff'}];
@@ -644,19 +612,23 @@ function stopListeners() {
 
 // ===== AUTH =====
 function doLogin() {
-  const pl = window._pendingLogin;
-  const u = pl ? pl.u : (document.getElementById('li-user')||{}).value||'';
-  const p = pl ? pl.p : (document.getElementById('li-pass')||{}).value||'';
-  window._pendingLogin = null;
-  const user = USERS.find(x=>x.id===u.trim()&&x.pass===p);
-  const errEl = document.getElementById('li-err');
-  if(!user){if(errEl){errEl.style.display='block';errEl.style.color='var(--co)';errEl.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';}return;}
+  var u = document.getElementById('li-user').value.trim();
+  var p = document.getElementById('li-pass').value;
+  var errEl = document.getElementById('li-err');
+  var user = USERS.find(function(x){return x.id===u && x.pass===p;});
+  if(!user){
+    errEl.style.display='block';
+    errEl.style.color='var(--co)';
+    errEl.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+    return;
+  }
+  errEl.style.display='none';
   curUser = user;
   localStorage.setItem('wh_user', user.id);
   document.getElementById('login-wrap').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('ui-user').textContent = user.name;
-  const rp = document.getElementById('ui-role');
+  var rp = document.getElementById('ui-role');
   rp.textContent = user.role==='admin'?'Admin':'Staff';
   rp.className = 'badge '+(user.role==='admin'?'b-adj':'b-ok');
   document.getElementById('rc-d').value = today();
@@ -664,9 +636,10 @@ function doLogin() {
   fillMonths();
   if(db){
     setSyncStatus('loading');
-    initData().then(() => startListeners()).catch(e => { console.error(e); startListeners(); });
+    initData().then(function(){startListeners();}).catch(function(e){console.error(e);startListeners();});
   } else {
     setSyncStatus('err');
+    alert('Firebase ไม่พร้อม กรุณารีเฟรชหน้า');
   }
 }
 function doLogout() {
@@ -680,9 +653,6 @@ function doLogout() {
 }
 
 // ===== UI HELPERS =====
-window.doLogin = doLogin;
-window._doLogin = doLogin;
-window.doLogout = doLogout;
 
 function updStats() {
   document.getElementById('st-t').textContent = items.length;
@@ -1169,32 +1139,27 @@ function updClock(){document.getElementById('clock').textContent=new Date().toLo
 setInterval(updClock,1000); updClock();
 
 // ===== INIT =====
-window.rStock=rStock; window.rHist=rHist; window.rReport=rReport;
-document.getElementById('loading-overlay').style.display='none';
-
-const _saved = localStorage.getItem('wh_user');
-const _autoUser = _saved ? USERS.find(x=>x.id===_saved) : null;
-if(_autoUser) {
-  curUser = _autoUser;
-  document.getElementById('login-wrap').style.display='none';
-  document.getElementById('app').style.display='block';
-  document.getElementById('ui-user').textContent = _autoUser.name;
-  const rp = document.getElementById('ui-role');
-  rp.textContent = _autoUser.role==='admin'?'Admin':'Staff';
-  rp.className = 'badge '+(_autoUser.role==='admin'?'b-adj':'b-ok');
-  document.getElementById('rc-d').value = today();
-  document.getElementById('is-d').value = today();
-  fillMonths();
-  setSyncStatus('loading');
-  if(db){
-    initData().then(()=>startListeners()).catch(()=>startListeners());
-  } else {
-    setSyncStatus('err');
-    toast('Firebase ไม่พร้อม — ข้อมูลอาจไม่ sync','warn');
+(function(){
+  var _saved = localStorage.getItem('wh_user');
+  var _autoUser = _saved ? USERS.find(function(x){return x.id===_saved;}) : null;
+  if(_autoUser) {
+    curUser = _autoUser;
+    document.getElementById('login-wrap').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.getElementById('ui-user').textContent = _autoUser.name;
+    var rp = document.getElementById('ui-role');
+    rp.textContent = _autoUser.role==='admin'?'Admin':'Staff';
+    rp.className = 'badge '+(_autoUser.role==='admin'?'b-adj':'b-ok');
+    document.getElementById('rc-d').value = today();
+    document.getElementById('is-d').value = today();
+    fillMonths();
+    if(db){
+      setSyncStatus('loading');
+      initData().then(function(){startListeners();}).catch(function(){startListeners();});
+    } else {
+      setSyncStatus('err');
+    }
   }
-} else {
-  document.getElementById('login-wrap').style.display='flex';
-}
 })();
 </script>
 </body>
