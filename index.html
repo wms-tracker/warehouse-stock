@@ -920,7 +920,7 @@ function rStock(){
   var f=items.filter(function(it){
     var mq=!q||it.name.toLowerCase().includes(q)||((cats.find(function(c){return c.id===it.catId;})||{}).name||'').toLowerCase().includes(q);
     return mq&&(!sf||st(it)===sf)&&(!cf||it.catId===cf);
-  });
+  }).sort(function(a,b){return a.name.localeCompare(b.name,'th');});
   var tv=0;items.forEach(function(i){tv+=i.qty*(i.price||0);});
   var tel=document.getElementById('total-val');if(tel)tel.textContent='มูลค่าสต็อกรวม: '+fmtB(tv);
   if(!f.length){b.innerHTML='<tr><td colspan="11" class="empty">ไม่พบข้อมูล</td></tr>';return;}
