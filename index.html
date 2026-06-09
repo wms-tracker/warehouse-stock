@@ -487,26 +487,35 @@ function doLogin(){
 
 <script>
 (function(){
-const firebaseConfig = {
-  apiKey: "AIzaSyAFB1PyOfl1eY6IN68E04Pi2t2PqmjroEs",
-  authDomain: "warehouse-stock-8ad17.firebaseapp.com",
-  projectId: "warehouse-stock-8ad17",
-  storageBucket: "warehouse-stock-8ad17.firebasestorage.app",
-  messagingSenderId: "736928545848",
-  appId: "1:736928545848:web:946fe8599801e2b6e13acd"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+// *** ตั้ง _doLogin ก่อนเลย (function hoisting) เพื่อให้ปุ่ม login ทำงานได้แม้ Firebase โหลดช้า ***
+window._doLogin = doLogin;
+window.doLogin = doLogin;
+
+// Firebase init (ครอบ try-catch)
+let db = null;
+try {
+  if (typeof firebase !== 'undefined') {
+    if (!firebase.apps.length) firebase.initializeApp({
+      apiKey: "AIzaSyAFB1PyOfl1eY6IN68E04Pi2t2PqmjroEs",
+      authDomain: "warehouse-stock-8ad17.firebaseapp.com",
+      projectId: "warehouse-stock-8ad17",
+      storageBucket: "warehouse-stock-8ad17.firebasestorage.app",
+      messagingSenderId: "736928545848",
+      appId: "1:736928545848:web:946fe8599801e2b6e13acd"
+    });
+    db = firebase.firestore();
+  }
+} catch(e) { console.warn('Firebase init error:', e); }
 
 // compat wrappers
-const collection = (db,c) => db.collection(c);
-const doc = (db,c,id) => db.collection(c).doc(id);
+const collection = (d,c) => d.collection(c);
+const doc = (d,c,id) => d.collection(c).doc(id);
 const setDoc = (ref,data) => ref.set(data);
 const deleteDoc = (ref) => ref.delete();
 const getDocs = (ref) => ref.get();
 const addDoc = (ref,data) => ref.add(data);
-const onSnapshot = (ref,cb,err) => ref.onSnapshot(snap=>{snap.docs=snap.docs||[];cb(snap);},err||((e)=>{}));
-const writeBatch = (db) => db.batch();
+const onSnapshot = (ref,cb,errCb) => ref.onSnapshot(snap=>{cb(snap);},(errCb||((e)=>{})));
+const writeBatch = (d) => d.batch();
 const query = (ref,...args) => { let q=ref; args.forEach(a=>{if(a&&a._type==='orderBy')q=q.orderBy(a.field,a.dir);}); return q; };
 const orderBy = (field,dir='asc') => ({_type:'orderBy',field,dir});
 
@@ -560,6 +569,7 @@ function setSyncStatus(s) {
 
 // ===== FIREBASE OPS =====
 async function initData() {
+  if(!db) return;
   // Check if items actually exist
   const itemsSnap = await getDocs(collection(db,'items'));
   if(itemsSnap.empty) {
@@ -635,11 +645,13 @@ function stopListeners() {
 // ===== AUTH =====
 function doLogin() {
   const pl = window._pendingLogin;
-  const u = pl ? pl.u : document.getElementById('li-user').value.trim();
-  const p = pl ? pl.p : document.getElementById('li-pass').value;
+  const u = pl ? pl.u : (document.getElementById('li-user')||{}).value||'';
+  const p = pl ? pl.p : (document.getElementById('li-pass')||{}).value||'';
   window._pendingLogin = null;
-  const user = USERS.find(x=>x.id===u&&x.pass===p);
-  if(!user){document.getElementById('li-err').style.display='block';document.getElementById('li-err').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}
+  const user = USERS.find(x=>x.id===u.trim()&&x.pass===p);
+  const errEl = document.getElementById('li-err');
+  if(!user){if(errEl){errEl.style.display='block';errEl.style.color='var(--co)';errEl.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';}return;}
+  if(!db){if(errEl){errEl.style.display='block';errEl.style.color='var(--co)';errEl.textContent='❌ Firebase ยังไม่พร้อม กรุณารีเฟรชหน้า';}return;}
   curUser = user;
   localStorage.setItem('wh_user', user.id);
   document.getElementById('login-wrap').style.display='none';
