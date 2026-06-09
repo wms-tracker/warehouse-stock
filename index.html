@@ -196,7 +196,7 @@ tbody tr:hover{background:#FAFAF8}
           <button class="btn b-ghost b-sm" onclick="exportStockCSV()">⬇ Export</button>
         </div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th style="width:30%">สินค้า</th><th style="width:9%">หน่วย</th><th style="width:10%">หมวด</th><th style="width:10%">คงเหลือ</th><th style="width:9%">ขั้นต่ำ</th><th style="width:11%">มูลค่า(฿)</th><th style="width:10%">สถานะ</th><th style="width:11%">จัดการ</th></tr></thead>
+          <thead><tr><th style="width:22%">สินค้า</th><th style="width:7%">หน่วย</th><th style="width:8%">หมวด</th><th style="width:7%">คงเหลือ</th><th style="width:7%">ขั้นต่ำ</th><th style="width:9%">มูลค่า(฿)</th><th style="width:7%">ใช้/วัน</th><th style="width:8%">ใช้/เดือน</th><th style="width:9%">พอใช้(เดือน)</th><th style="width:7%">สถานะ</th><th style="width:9%">จัดการ</th></tr></thead>
           <tbody id="stock-body"></tbody>
         </table></div>
       </div>
@@ -714,20 +714,28 @@ function rStock(){
   });
   var tv=0;items.forEach(function(i){tv+=i.qty*(i.price||0);});
   var tel=document.getElementById('total-val');if(tel)tel.textContent='มูลค่าสต็อกรวม: '+fmtB(tv);
-  if(!f.length){b.innerHTML='<tr><td colspan="8" class="empty">ไม่พบข้อมูล</td></tr>';return;}
+  if(!f.length){b.innerHTML='<tr><td colspan="11" class="empty">ไม่พบข้อมูล</td></tr>';return;}
   b.innerHTML=f.map(function(it){
     var val=it.qty*(it.price||0);
     var pct=it.minQty>0?Math.min(100,Math.round(it.qty/it.minQty*100)):100;
     var bc=st(it)==='out'?'#D85A30':st(it)==='low'?'#BA7517':'#1D9E75';
+    var avgMonth=getMonthlyUsage(it.id,3);
+    var avgDay=avgMonth>0?Math.round(avgMonth/30*10)/10:0;
+    var mLeft=avgMonth>0?Math.round(it.qty/avgMonth*10)/10:null;
+    var mLeftStr=mLeft===null?'∞':mLeft.toFixed(1);
+    var mLeftColor=mLeft===null?'var(--muted)':mLeft<1?'#D85A30':mLeft<2?'#BA7517':'#1D9E75';
     return'<tr><td style="font-weight:600"><div style="overflow:hidden;text-overflow:ellipsis" title="'+it.name+'">'+it.name+'</div><div class="prog"><div class="prog-fill" style="width:'+pct+'%;background:'+bc+'"></div></div></td>'
       +'<td style="color:var(--muted)">'+it.unit+'</td><td>'+catChip(it.catId)+'</td>'
       +'<td class="'+(it.qty<=0?'neg':'')+'" style="font-weight:700">'+it.qty.toLocaleString()+'</td>'
       +'<td style="color:var(--muted)">'+it.minQty.toLocaleString()+'</td>'
       +'<td style="color:var(--muted);font-size:12px">'+fmtB(val)+'</td>'
+      +'<td style="color:var(--muted);font-size:12px;text-align:center">'+(avgDay>0?avgDay:'-')+'</td>'
+      +'<td style="color:var(--muted);font-size:12px;text-align:center">'+(avgMonth>0?avgMonth:'-')+'</td>'
+      +'<td style="font-weight:700;font-size:12px;text-align:center;color:'+mLeftColor+'">'+mLeftStr+'</td>'
       +'<td>'+sbadge(it)+'</td>'
       +'<td><button class="btn b-ghost b-sm" data-id="'+it.id+'" data-tab="receive" onclick="qGo(this.dataset.id,this.dataset.tab)" style="margin-right:3px">+</button>'
       +'<button class="btn b-ghost b-sm" data-id="'+it.id+'" data-tab="issue" onclick="qGo(this.dataset.id,this.dataset.tab)" style="margin-right:3px">-</button>'
-      +'<button class="btn b-ghost b-sm" data-id="'+it.id+'" onclick="openEditFn(this.dataset.id)">\u270f</button></td></tr>';
+      +'<button class="btn b-ghost b-sm" data-id="'+it.id+'" onclick="openEditFn(this.dataset.id)">✏</button></td></tr>';
   }).join('');
 }
 
@@ -996,8 +1004,8 @@ function dlFile(rows,filename){
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));a.download=filename;a.click();
 }
 function exportStockCSV(){
-  var rows=[['ชื่อสินค้า','หน่วย','หมวดหมู่','สต็อก','ขั้นต่ำ','ราคา/หน่วย','มูลค่ารวม','สถานะ']];
-  items.forEach(function(it){var c=(cats.find(function(x){return x.id===it.catId;})||{}).name||'-';rows.push([it.name,it.unit,c,it.qty,it.minQty,it.price||0,it.qty*(it.price||0),st(it)==='ok'?'ปกติ':st(it)==='low'?'ต่ำ':'หมด']);});
+  var rows=[['ชื่อสินค้า','หน่วย','หมวดหมู่','สต็อก','ขั้นต่ำ','ราคา/หน่วย','มูลค่ารวม','ใช้/วัน','ใช้/เดือน','พอใช้(เดือน)','สถานะ']];
+  items.forEach(function(it){var c=(cats.find(function(x){return x.id===it.catId;})||{}).name||'-';var am=getMonthlyUsage(it.id,3);var ad=am>0?Math.round(am/30*10)/10:0;var ml=am>0?Math.round(it.qty/am*10)/10:null;rows.push([it.name,it.unit,c,it.qty,it.minQty,it.price||0,it.qty*(it.price||0),ad>0?ad:'-',am>0?am:'-',ml!==null?ml:'∞',st(it)==='ok'?'ปกติ':st(it)==='low'?'ต่ำ':'หมด']);});
   dlFile(rows,'stock_'+today()+'.csv');toast('Export สต็อกเรียบร้อย','success');
 }
 function dlCSV(){
