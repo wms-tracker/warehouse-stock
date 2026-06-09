@@ -170,6 +170,7 @@ tbody tr:hover{background:#FAFAF8}
     <div class="fg"><label>รหัสผ่าน</label><input type="password" id="li-pass" placeholder="password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn b-pk" style="width:100%;justify-content:center;margin-top:4px" onclick="doLogin()">🔐 เข้าสู่ระบบ</button>
     <div id="li-err" style="color:var(--co);font-size:12px;text-align:center;margin-top:10px;display:none"></div>
+    <div id="li-status" style="font-size:11px;text-align:center;margin-top:8px;color:var(--muted)">⏳ กำลังเชื่อม Firebase...</div>
   </div>
 </div>
 
@@ -453,14 +454,18 @@ tbody tr:hover{background:#FAFAF8}
 
 <div class="toast-wrap" id="toast-wrap"></div>
 
-<!-- CHART.JS + FIREBASE COMPAT -->
+<!-- CHART.JS + FIREBASE v8 (classic SDK) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
 <script>
 // Firebase init
 var db = null;
+function _setStatus(msg, ok) {
+  var el = document.getElementById('li-status');
+  if(el){ el.textContent = msg; el.style.color = ok===false ? 'var(--co)' : ok===true ? 'var(--tl)' : 'var(--muted)'; }
+}
 try {
   if (!firebase.apps.length) {
     firebase.initializeApp({
@@ -473,7 +478,11 @@ try {
     });
   }
   db = firebase.firestore();
-} catch(e) { console.error('Firebase init failed:', e); }
+  _setStatus('✅ Firebase พร้อม — กรุณาเข้าสู่ระบบ', true);
+} catch(e) {
+  console.error('Firebase init failed:', e);
+  _setStatus('❌ Firebase error: ' + e.message, false);
+}
 
 // compat wrappers
 function collection(d,c){ return d.collection(c); }
@@ -636,10 +645,10 @@ function doLogin() {
   fillMonths();
   if(db){
     setSyncStatus('loading');
-    initData().then(function(){startListeners();}).catch(function(e){console.error(e);startListeners();});
+    initData().then(function(){startListeners();}).catch(function(e){console.error('initData:',e);startListeners();});
   } else {
     setSyncStatus('err');
-    alert('Firebase ไม่พร้อม กรุณารีเฟรชหน้า');
+    toast('Firebase ไม่พร้อม ข้อมูลจะไม่ sync','warn');
   }
 }
 function doLogout() {
