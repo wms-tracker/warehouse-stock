@@ -153,6 +153,8 @@ tbody tr:hover{background:#FAFAF8}
     <div class="topbar-right">
       <span id="ui-user" style="font-size:13px;font-weight:600"></span>
       <span id="ui-role" class="badge"></span>
+      <span id="wh-name-disp" style="font-size:12px;background:var(--bl-l);color:var(--bl-d);border:1px solid var(--bl-m);border-radius:99px;padding:3px 10px;cursor:pointer" onclick="go('warehouse')">🏭 คลัง</span>
+      <select id="wh-sel" onchange="switchWarehouse(this.value)" style="font-size:12px;border:1px solid var(--border);border-radius:8px;padding:3px 8px;background:#fff"></select>
       <span class="sync-ok" id="sync-st">✅ Sync</span>
       <span class="clock" id="clock"></span>
       <button class="btn b-ghost b-sm" onclick="printReport()" title="พิมพ์หน้านี้">🖨 พิมพ์</button>
@@ -176,6 +178,7 @@ tbody tr:hover{background:#FAFAF8}
       <button class="nav-item" onclick="go('trend')">📈 แนวโน้มสต็อก</button>
       <button class="nav-item" onclick="go('audit')">🔍 Audit Log</button>
       <button class="nav-item" id="nav-users" onclick="go('users')">👥 จัดการผู้ใช้</button>
+      <button class="nav-item" id="nav-warehouse" onclick="go('warehouse')">🏭 จัดการคลัง</button>
     </div>
     <div class="main">
       <div id="alert-zone"></div>
@@ -448,6 +451,39 @@ tbody tr:hover{background:#FAFAF8}
         </table></div>
       </div>
 
+<div id="panel-warehouse" class="panel">
+  <div class="page-title">จัดการคลังสินค้า</div>
+  <div class="page-sub">บริหารสาขาและโอนย้ายสินค้าระหว่างคลัง</div>
+  
+  <div class="card" id="wh-add-card">
+    <div class="card-title">➕ เพิ่มคลังใหม่</div>
+    <div class="g3">
+      <div class="fg"><label>ชื่อคลัง</label><input type="text" id="wh-name" placeholder="เช่น คลังสาขา 2"></div>
+      <div class="fg"><label>สถานที่/สาขา</label><input type="text" id="wh-loc" placeholder="เช่น อำเภอเมือง"></div>
+    </div>
+    <div class="btn-row"><button class="btn b-pk" onclick="addWhFn()">➕ เพิ่มคลัง</button></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🏭 รายการคลังทั้งหมด</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th style="width:25%">ชื่อคลัง</th><th style="width:20%">สถานที่</th><th style="width:15%">จำนวนสินค้า</th><th style="width:20%">มูลค่าสต็อก</th><th style="width:20%">จัดการ</th></tr></thead>
+      <tbody id="wh-body"></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔄 โอนย้ายสินค้าระหว่างคลัง</div>
+    <div class="g3">
+      <div class="fg"><label>จากคลัง</label><select id="tr-from" onchange="trFillItems()"></select></div>
+      <div class="fg"><label>ไปคลัง</label><select id="tr-to"></select></div>
+      <div class="fg full"><label>สินค้า</label><select id="tr-item"></select></div>
+      <div class="fg"><label>จำนวน</label><input type="number" id="tr-qty" placeholder="0" min="1"></div>
+      <div class="fg"><label>หมายเหตุ</label><input type="text" id="tr-note" placeholder="หมายเหตุ..."></div>
+    </div>
+    <div class="btn-row"><button class="btn b-bl" onclick="doTransfer()">🔄 โอนสินค้า</button></div>
+  </div>
+</div>
     </div>
   </div>
 </div>
@@ -538,6 +574,8 @@ var DEF_ITEMS=[
 var db,items=[],txns=[],cats=[],pending=[];
 var curUser=null,rpChart=null,_cb=null,_eid=null;
 var unsubItems=null,unsubTxns=null,unsubCats=null,unsubPending=null;
+var _allItems=[],_allTxns=[],_allPending=[];
+var curWH=null,warehouses=[],unsubWarehouses=null;
 var SESSION_TIMEOUT=30*60*1000;
 var _sessionTimer=null,_sessionWarnTimer=null,_sessionWarnEl=null;
 
@@ -562,30 +600,38 @@ async function seedData(){
   if(snap.empty){
     var batch=db.batch();
     DEF_CATS.forEach(function(c){batch.set(db.collection('cats').doc(c.id),c);});
-    DEF_ITEMS.forEach(function(it){batch.set(db.collection('items').doc(it.id),it);});
+    DEF_ITEMS.forEach(function(it){var item=Object.assign({},it,{warehouseId:'wh-main'});batch.set(db.collection('items').doc(it.id),item);});
     await batch.commit();
+  }
+  var whSnap=await db.collection('warehouses').limit(1).get();
+  if(whSnap.empty){
+    await db.collection('warehouses').doc('wh-main').set({id:'wh-main',name:'คลังหลัก',location:'สาขาหลัก',createdAt:new Date().toISOString()});
+    var allItems=await db.collection('items').get();
+    if(!allItems.empty){
+      var batch2=db.batch();
+      allItems.docs.forEach(function(d){if(!d.data().warehouseId)batch2.update(db.collection('items').doc(d.id),{warehouseId:'wh-main'});});
+      await batch2.commit();
+    }
   }
 }
 
 function startListeners(){
   setSyncSt('load');
   unsubItems=db.collection('items').onSnapshot(function(snap){
-    items=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
-    refresh();setSyncSt('ok');
+    _allItems=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    applyWhFilter();setSyncSt('ok');
   },function(){setSyncSt('err');});
   unsubTxns=db.collection('txns').orderBy('createdAt','desc').onSnapshot(function(snap){
-    txns=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
-    if(document.getElementById('panel-history').classList.contains('active'))rHist();
-    if(document.getElementById('panel-report').classList.contains('active'))rReport();
+    _allTxns=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    applyWhFilter();
   });
   unsubCats=db.collection('cats').onSnapshot(function(snap){
     cats=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
     fillCatSels();rStock();
   });
   unsubPending=db.collection('pending').onSnapshot(function(snap){
-    pending=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
-    updPendBadge();
-    if(document.getElementById('panel-approve').classList.contains('active'))rApprove();
+    _allPending=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    applyWhFilter();
   });
 }
 
@@ -594,12 +640,144 @@ function stopListeners(){
   if(unsubCats)unsubCats();if(unsubPending)unsubPending();
 }
 
-async function saveItem(item){await db.collection('items').doc(item.id).set(item);}
+function applyWhFilter(){
+  items=curWH?_allItems.filter(function(i){return i.warehouseId===curWH;}):_allItems;
+  txns=curWH?_allTxns.filter(function(t){return t.warehouseId===curWH;}):_allTxns;
+  pending=curWH?_allPending.filter(function(p){return p.warehouseId===curWH;}):_allPending;
+  refresh();
+  updPendBadge();
+  if(document.getElementById('panel-history')&&document.getElementById('panel-history').classList.contains('active'))rHist();
+  if(document.getElementById('panel-report')&&document.getElementById('panel-report').classList.contains('active'))rReport();
+  if(document.getElementById('panel-approve')&&document.getElementById('panel-approve').classList.contains('active'))rApprove();
+}
+
+function switchWarehouse(id){
+  curWH=id;
+  var wh=warehouses.find(function(w){return w.id===id;});
+  var nd=document.getElementById('wh-name-disp');if(nd)nd.textContent=wh?wh.name:'';
+  applyWhFilter();
+  toast('คลัง: '+(wh?wh.name:id),'success');
+}
+
+function startWarehousesListener(){
+  if(unsubWarehouses)unsubWarehouses();
+  unsubWarehouses=db.collection('warehouses').onSnapshot(function(snap){
+    warehouses=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    fillWhSel();
+    if(document.getElementById('panel-warehouse')&&document.getElementById('panel-warehouse').classList.contains('active'))rWarehouses();
+  });
+}
+
+function fillWhSel(){
+  var sel=document.getElementById('wh-sel');
+  if(!sel||!warehouses.length)return;
+  var prev=curWH||warehouses[0].id;
+  sel.innerHTML=warehouses.map(function(w){return'<option value="'+w.id+'"'+(w.id===prev?' selected':'')+'>'+w.name+'</option>';}).join('');
+  if(!curWH){curWH=warehouses[0].id;applyWhFilter();}
+  var wh=warehouses.find(function(w){return w.id===curWH;});
+  var nd=document.getElementById('wh-name-disp');if(nd)nd.textContent=wh?wh.name:'';
+}
+
+function rWarehouses(){
+  var b=document.getElementById('wh-body');
+  if(!warehouses.length){b.innerHTML='<tr><td colspan="5" class="empty">ยังไม่มีคลัง</td></tr>';return;}
+  b.innerHTML=warehouses.map(function(w){
+    var cnt=_allItems.filter(function(i){return i.warehouseId===w.id;}).length;
+    var val=_allItems.filter(function(i){return i.warehouseId===w.id;}).reduce(function(s,i){return s+i.qty*(i.price||0);},0);
+    var isActive=w.id===curWH;
+    return'<tr style="'+(isActive?'background:var(--tl-l)':'')+'"><td style="font-weight:600">'+w.name+(isActive?' <span class="badge b-ok">ใช้งานอยู่</span>':'')+'</td>'
+      +'<td style="color:var(--muted)">'+(w.location||'-')+'</td>'
+      +'<td>'+cnt+' รายการ</td>'
+      +'<td>'+fmtB(val)+'</td>'
+      +'<td><button class="btn b-tl b-sm" data-id="'+w.id+'" onclick="switchWarehouse(this.dataset.id)" style="margin-right:4px">เข้าใช้</button>'
+      +(curUser&&curUser.role==='admin'?'<button class="btn b-ghost b-sm" data-id="'+w.id+'" onclick="editWhFn(this.dataset.id)" style="margin-right:4px">✏</button>'
+      +'<button class="btn b-ghost b-sm" data-id="'+w.id+'" onclick="delWhFn(this.dataset.id)" style="color:var(--co)">🗑</button>':'')+'</td></tr>';
+  }).join('');
+  var trSel=document.getElementById('tr-from');var toDest=document.getElementById('tr-to');
+  if(trSel){
+    var opts=warehouses.map(function(w){return'<option value="'+w.id+'"'+(w.id===curWH?' selected':'')+'>'+w.name+'</option>';}).join('');
+    trSel.innerHTML=opts;toDest.innerHTML=opts;
+    trFillItems();
+  }
+}
+
+function trFillItems(){
+  var fromId=document.getElementById('tr-from').value;
+  var sel=document.getElementById('tr-item');
+  sel.innerHTML='<option value="">-- เลือกสินค้า --</option>'+_allItems.filter(function(i){return i.warehouseId===fromId;}).map(function(i){return'<option value="'+i.id+'">'+i.name+' (คงเหลือ: '+i.qty+')</option>';}).join('');
+}
+
+function doTransfer(){
+  var fromId=document.getElementById('tr-from').value;
+  var toId=document.getElementById('tr-to').value;
+  var itemId=document.getElementById('tr-item').value;
+  var qty=parseInt(document.getElementById('tr-qty').value);
+  var note=document.getElementById('tr-note').value;
+  if(!fromId||!toId||!itemId||!qty||qty<=0){toast('กรุณากรอกข้อมูลให้ครบ','error');return;}
+  if(fromId===toId){toast('ต้นทางและปลายทางต้องต่างกัน','error');return;}
+  var srcItem=_allItems.find(function(i){return i.id===itemId;});
+  if(!srcItem){toast('ไม่พบสินค้า','error');return;}
+  if(srcItem.qty<qty){toast('สต็อกไม่พอ (มี '+srcItem.qty+')','error');return;}
+  var toWH=warehouses.find(function(w){return w.id===toId;});
+  var fromWH=warehouses.find(function(w){return w.id===fromId;});
+  var destItem=_allItems.find(function(i){return i.warehouseId===toId&&i.name===srcItem.name;});
+  var batch=db.batch();
+  batch.update(db.collection('items').doc(srcItem.id),{qty:srcItem.qty-qty});
+  if(destItem){
+    batch.update(db.collection('items').doc(destItem.id),{qty:destItem.qty+qty});
+  } else {
+    var newId=genId();
+    batch.set(db.collection('items').doc(newId),Object.assign({},srcItem,{id:newId,warehouseId:toId,qty:qty}));
+  }
+  var t1={id:genId(),type:'transfer',itemId:srcItem.id,itemName:srcItem.name,qty:qty,warehouseId:fromId,toWarehouseId:toId,note:'โอนไป '+(toWH?toWH.name:toId)+(note?' - '+note:''),by:curUser?curUser.name:'',date:today(),createdAt:new Date().toISOString()};
+  batch.set(db.collection('txns').doc(t1.id),t1);
+  batch.commit().then(function(){
+    toast('โอนสินค้าสำเร็จ '+qty+' หน่วย','success');
+    document.getElementById('tr-qty').value='';document.getElementById('tr-note').value='';
+    logAudit('transfer','โอน '+srcItem.name+' '+qty+' หน่วย จาก '+(fromWH?fromWH.name:fromId)+' ไป '+(toWH?toWH.name:toId),'success');
+  }).catch(function(e){toast('เกิดข้อผิดพลาด: '+e.message,'error');});
+}
+
+function addWhFn(){
+  var name=document.getElementById('wh-name').value.trim();
+  var loc=document.getElementById('wh-loc').value.trim();
+  if(!name){toast('กรุณากรอกชื่อคลัง','error');return;}
+  var id='wh-'+genId();
+  db.collection('warehouses').doc(id).set({id:id,name:name,location:loc,createdAt:new Date().toISOString()}).then(function(){
+    toast('เพิ่มคลัง '+name+' สำเร็จ','success');
+    document.getElementById('wh-name').value='';document.getElementById('wh-loc').value='';
+    logAudit('warehouse','เพิ่มคลัง: '+name,'success');
+  }).catch(function(e){toast('เกิดข้อผิดพลาด','error');});
+}
+
+function editWhFn(id){
+  var wh=warehouses.find(function(w){return w.id===id;});
+  if(!wh)return;
+  var name=prompt('ชื่อคลัง:',wh.name);
+  if(!name||!name.trim())return;
+  var loc=prompt('สถานที่:',wh.location||'');
+  db.collection('warehouses').doc(id).update({name:name.trim(),location:loc||''}).then(function(){
+    toast('แก้ไขคลังสำเร็จ','success');
+  }).catch(function(e){toast('เกิดข้อผิดพลาด','error');});
+}
+
+function delWhFn(id){
+  var wh=warehouses.find(function(w){return w.id===id;});
+  var cnt=_allItems.filter(function(i){return i.warehouseId===id;}).length;
+  if(cnt>0){toast('ไม่สามารถลบคลังที่มีสินค้า ('+cnt+' รายการ)','error');return;}
+  if(!confirm('ลบคลัง "'+wh.name+'" ?'))return;
+  db.collection('warehouses').doc(id).delete().then(function(){
+    toast('ลบคลังสำเร็จ','success');
+    if(curWH===id&&warehouses.length>1){switchWarehouse(warehouses.find(function(w){return w.id!==id;}).id);}
+  }).catch(function(e){toast('เกิดข้อผิดพลาด','error');});
+}
+
+async function saveItem(item){if(!item.warehouseId)item.warehouseId=curWH;await db.collection('items').doc(item.id).set(item);}
 async function delItemDB(id){await db.collection('items').doc(id).delete();}
 async function saveCat(cat){await db.collection('cats').doc(cat.id).set(cat);}
 async function delCatDB(id){await db.collection('cats').doc(id).delete();}
-async function addTxn(t){t.id=genId();t.createdAt=new Date().toISOString();await db.collection('txns').doc(t.id).set(t);}
-async function addPend(r){r.id=genId();r.createdAt=new Date().toISOString();await db.collection('pending').doc(r.id).set(r);}
+async function addTxn(t){t.id=genId();t.createdAt=new Date().toISOString();if(!t.warehouseId)t.warehouseId=curWH;await db.collection('txns').doc(t.id).set(t);}
+async function addPend(r){r.id=genId();r.createdAt=new Date().toISOString();if(!r.warehouseId)r.warehouseId=curWH;await db.collection('pending').doc(r.id).set(r);}
 async function delPend(id){await db.collection('pending').doc(id).delete();}
 
 function resetSessionTimer(){
@@ -658,12 +836,13 @@ function doLogin(){
     seedData().then(function(){
       initUsers();
       startListeners();
+      startWarehousesListener();
       startAuditListener();
       startUsersListener();
       logAudit('login','เข้าสู่ระบบ: '+user.name,'success');
       resetSessionTimer();
       setTimeout(checkAlertOnLoad, 2000);
-    }).catch(function(e){console.error(e);startListeners();});
+    }).catch(function(e){console.error(e);startListeners();startWarehousesListener();});
   }).catch(function(){
     // Firebase error - try local
     var user=USERS.find(function(x){return x.id===u&&x.pass===p;});
@@ -675,7 +854,7 @@ function doLogin(){
     var rp=document.getElementById('ui-role');rp.textContent=user.role==='admin'?'Admin':'Staff';rp.className='badge '+(user.role==='admin'?'b-adj':'b-ok');
     document.getElementById('rc-d').value=today();document.getElementById('is-d').value=today();
     fillMonths();setSyncSt('load');
-    seedData().then(function(){startListeners();resetSessionTimer();setTimeout(checkAlertOnLoad,2000);}).catch(function(e){console.error(e);startListeners();resetSessionTimer();});
+    seedData().then(function(){startListeners();startWarehousesListener();resetSessionTimer();setTimeout(checkAlertOnLoad,2000);}).catch(function(e){console.error(e);startListeners();startWarehousesListener();resetSessionTimer();});
   });
 }
 function doLogout(){
@@ -684,12 +863,15 @@ function doLogout(){
   stopListeners();
   if(unsubAudit){unsubAudit();unsubAudit=null;}
   if(unsubUsers){unsubUsers();unsubUsers=null;}
+  if(unsubWarehouses){unsubWarehouses();unsubWarehouses=null;}
+  curWH=null;warehouses=[];_allItems=[];_allTxns=[];_allPending=[];
   curUser=null;auditLogs=[];appUsers=[];
   document.getElementById('app').style.display='none';
   document.getElementById('login-wrap').style.display='flex';
   document.getElementById('li-user').value='';document.getElementById('li-pass').value='';
   // Reset nav
   var nu=document.getElementById('nav-users');if(nu)nu.style.display='';
+  var nd=document.getElementById('wh-name-disp');if(nd)nd.textContent='';
 }
 
 function updStats(){
@@ -856,7 +1038,7 @@ function rManage(){
 }
 
 function go(name){
-  var names=['stock','receive','issue','approve','history','report','manage','plan','trend','audit','users'];
+  var names=['stock','receive','issue','approve','history','report','manage','plan','trend','audit','users','warehouse'];
   document.querySelectorAll('.nav-item').forEach(function(t,i){t.classList.toggle('active',names[i]===name);});
   document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
   document.getElementById('panel-'+name).classList.add('active');
@@ -868,6 +1050,7 @@ function go(name){
   if(name==='trend'){fillTrendSel();renderTrend();}
   if(name==='audit')rAudit();
   if(name==='users')rUsers();
+  if(name==='warehouse')rWarehouses();
 }
 
 function toast(msg,type){
