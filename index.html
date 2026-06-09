@@ -479,15 +479,14 @@ function doLogin(){
 }
 </script>
 
-<!-- CHART.JS (แยกออกจาก module เพื่อป้องกัน CDN block) -->
+<!-- CHART.JS -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<!-- FIREBASE COMPAT (ไม่ใช้ ESM เพื่อรองรับทุก host) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
-<!-- FIREBASE SDK -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot, getDoc, deleteDoc, collection, addDoc, getDocs, query, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-const Chart = window.Chart;
-
+<script>
+(function(){
 const firebaseConfig = {
   apiKey: "AIzaSyAFB1PyOfl1eY6IN68E04Pi2t2PqmjroEs",
   authDomain: "warehouse-stock-8ad17.firebaseapp.com",
@@ -496,9 +495,20 @@ const firebaseConfig = {
   messagingSenderId: "736928545848",
   appId: "1:736928545848:web:946fe8599801e2b6e13acd"
 };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-const fireapp = initializeApp(firebaseConfig);
-const db = getFirestore(fireapp);
+// compat wrappers
+const collection = (db,c) => db.collection(c);
+const doc = (db,c,id) => db.collection(c).doc(id);
+const setDoc = (ref,data) => ref.set(data);
+const deleteDoc = (ref) => ref.delete();
+const getDocs = (ref) => ref.get();
+const addDoc = (ref,data) => ref.add(data);
+const onSnapshot = (ref,cb,err) => ref.onSnapshot(snap=>{snap.docs=snap.docs||[];cb(snap);},err||((e)=>{}));
+const writeBatch = (db) => db.batch();
+const query = (ref,...args) => { let q=ref; args.forEach(a=>{if(a&&a._type==='orderBy')q=q.orderBy(a.field,a.dir);}); return q; };
+const orderBy = (field,dir='asc') => ({_type:'orderBy',field,dir});
 
 const MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const USERS = [{id:'admin',name:'ผู้ดูแลระบบ',pass:'admin123',role:'admin'},{id:'staff',name:'พนักงานคลัง',pass:'staff123',role:'staff'}];
@@ -1169,6 +1179,7 @@ if(_autoUser) {
 } else {
   document.getElementById('login-wrap').style.display='flex';
 }
+})();
 </script>
 </body>
 </html>
