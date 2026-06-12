@@ -173,6 +173,8 @@ tbody tr:hover{background:#FAFAF8}
       <button class="nav-item" onclick="go('report')">📊 รายงานเดือน</button>
       <div class="nav-section">ตั้งค่า</div>
       <button class="nav-item" onclick="go('manage')">⚙️ จัดการสินค้า</button>
+      <div class="nav-section">จัดซื้อ</div>
+      <button class="nav-item" onclick="go('po')">🛒 ใบสั่งซื้อ (PO)</button>
       <div class="nav-section">วิเคราะห์</div>
       <button class="nav-item" onclick="go('plan')">📦 วางแผนสั่งซื้อ</button>
       <button class="nav-item" onclick="go('trend')">📈 แนวโน้มสต็อก</button>
@@ -486,6 +488,41 @@ tbody tr:hover{background:#FAFAF8}
 </div>
     </div>
   </div>
+</div>
+
+<div id="panel-po" class="panel">
+  <div class="page-title">ใบสั่งซื้อ (PO)</div>
+  <div class="page-sub">ติดตามการสั่งซื้อจากซัพพลายเออร์ และบันทึกการรับสินค้าเข้า</div>
+  <div class="sr" style="margin-bottom:12px;">
+    <input type="text" id="po-search" placeholder="🔍 ค้นหา PO / ซัพพลายเออร์..." oninput="filterPO(this.value)">
+    <select id="po-status-filter" onchange="filterPO(document.getElementById('po-search').value)">
+      <option value="">ทุกสถานะ</option>
+      <option value="pending">รอรับสินค้า</option>
+      <option value="partial">รับบางส่วน</option>
+      <option value="received">รับครบแล้ว</option>
+      <option value="cancelled">ยกเลิก</option>
+    </select>
+    <button class="btn b-pk b-sm" onclick="openNewPOFn()">➕ สร้าง PO</button>
+  </div>
+  <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
+    <div class="stat-card am"><div class="stat-label">รอรับสินค้า</div><div class="stat-num" id="po-cnt-pending">0</div></div>
+    <div class="stat-card bl"><div class="stat-label">รับบางส่วน</div><div class="stat-num" id="po-cnt-partial">0</div></div>
+    <div class="stat-card tl"><div class="stat-label">รับครบแล้ว</div><div class="stat-num" id="po-cnt-received">0</div></div>
+    <div class="stat-card pk"><div class="stat-label">มูลค่ารวม (฿)</div><div class="stat-num" id="po-total-val" style="font-size:16px">0</div></div>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr>
+      <th style="width:14%">เลขที่ PO</th>
+      <th style="width:18%">ซัพพลายเออร์</th>
+      <th style="width:10%">วันที่สั่ง</th>
+      <th style="width:10%">วันที่คาด</th>
+      <th style="width:12%">สั่ง / รับแล้ว</th>
+      <th style="width:11%">มูลค่า (฿)</th>
+      <th style="width:10%">สถานะ</th>
+      <th style="width:15%">จัดการ</th>
+    </tr></thead>
+    <tbody id="po-body"></tbody>
+  </table></div>
 </div>
 
 <div class="modal-overlay" id="modal-confirm">
@@ -1038,7 +1075,7 @@ function rManage(){
 }
 
 function go(name){
-  var names=['stock','receive','issue','approve','history','report','manage','plan','trend','audit','users','warehouse'];
+  var names=['stock','receive','issue','approve','history','report','manage','po','plan','trend','audit','users','warehouse'];
   document.querySelectorAll('.nav-item').forEach(function(t,i){t.classList.toggle('active',names[i]===name);});
   document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
   document.getElementById('panel-'+name).classList.add('active');
@@ -1051,6 +1088,7 @@ function go(name){
   if(name==='audit')rAudit();
   if(name==='users')rUsers();
   if(name==='warehouse')rWarehouses();
+  if(name==='po')rPO();
 }
 
 function toast(msg,type){
@@ -1660,6 +1698,260 @@ loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js')
     +'<button onclick="location.reload()" style="padding:8px 20px;background:#D4537E;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">\ud83d\udd04 รีเฟรช</button>'
     +'</div>';
 });
+
+// =====================================================================
+// 🛒 PO — ใบสั่งซื้อจากซัพพลายเออร์
+// =====================================================================
+var _allPOs=[];
+var PO_ST={pending:{label:'รอรับสินค้า',cls:'b-out'},partial:{label:'รับบางส่วน',cls:'b-low'},received:{label:'รับครบแล้ว ✓',cls:'b-ok'},cancelled:{label:'ยกเลิก',cls:'b-adj'}};
+
+async function rPO(){
+  var b=document.getElementById('po-body');
+  b.innerHTML='<tr><td colspan="8" class="empty">⏳ กำลังโหลด...</td></tr>';
+  try{
+    var snap=await db.collection('purchaseOrders').orderBy('createdAt','desc').limit(200).get();
+    _allPOs=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    _renderPOList(_allPOs);
+  }catch(e){
+    b.innerHTML='<tr><td colspan="8" class="empty" style="color:var(--co)">โหลดไม่สำเร็จ: '+e.message+'</td></tr>';
+  }
+}
+
+function _renderPOList(pos){
+  var cnt={pending:0,partial:0,received:0};
+  var totalVal=0;
+  pos.forEach(function(p){
+    if(cnt[p.status]!==undefined)cnt[p.status]++;
+    totalVal+=(p.items||[]).reduce(function(s,it){return s+Number(it.unitPrice||0)*Number(it.qty||0);},0);
+  });
+  document.getElementById('po-cnt-pending').textContent=cnt.pending;
+  document.getElementById('po-cnt-partial').textContent=cnt.partial;
+  document.getElementById('po-cnt-received').textContent=cnt.received;
+  document.getElementById('po-total-val').textContent=fmt(totalVal);
+  var b=document.getElementById('po-body');
+  if(!pos.length){b.innerHTML='<tr><td colspan="8" class="empty">ยังไม่มีใบสั่งซื้อ</td></tr>';return;}
+  b.innerHTML=pos.map(function(po){
+    var st=PO_ST[po.status]||PO_ST.pending;
+    var totalQty=(po.items||[]).reduce(function(s,it){return s+Number(it.qty||0);},0);
+    var recvQty=(po.items||[]).reduce(function(s,it){return s+Number(it.receivedQty||0);},0);
+    var val=(po.items||[]).reduce(function(s,it){return s+Number(it.unitPrice||0)*Number(it.qty||0);},0);
+    return'<tr>'
+      +'<td style="font-weight:600">'+po.poNumber+'</td>'
+      +'<td>'+po.supplier+'</td>'
+      +'<td style="font-size:12px;color:var(--muted)">'+po.orderDate+'</td>'
+      +'<td style="font-size:12px;color:var(--muted)">'+(po.expectedDate||'-')+'</td>'
+      +'<td style="text-align:center;font-weight:600"><span style="color:var(--muted)">'+totalQty+'</span> / <span style="color:var(--tl)">'+recvQty+'</span></td>'
+      +'<td style="font-size:12px">'+fmtB(val)+'</td>'
+      +'<td><span class="badge '+st.cls+'">'+st.label+'</span></td>'
+      +'<td>'
+      +(po.status!=='received'&&po.status!=='cancelled'?'<button class="btn b-tl b-sm" data-id="'+po.id+'" onclick="openReceivePOFn(this.dataset.id)" style="margin-right:3px">📥 รับ</button>':'')
+      +'<button class="btn b-ghost b-sm" data-id="'+po.id+'" onclick="viewPOFn(this.dataset.id)">🔍 ดู</button>'
+      +'</td></tr>';
+  }).join('');
+}
+
+function filterPO(q){
+  var sf=document.getElementById('po-status-filter').value;
+  var f=_allPOs.filter(function(po){
+    var mq=!q||po.poNumber.toLowerCase().includes(q.toLowerCase())||(po.supplier||'').toLowerCase().includes(q.toLowerCase());
+    return mq&&(!sf||po.status===sf);
+  });
+  _renderPOList(f);
+}
+
+function openNewPOFn(){
+  var ov=document.createElement('div');
+  ov.id='po-new-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:580px;width:100%;max-height:90vh;overflow:auto;padding:22px 24px;">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+    +'<div style="font-size:16px;font-weight:700">🛒 สร้างใบสั่งซื้อ (PO) ใหม่</div>'
+    +'<button onclick="document.getElementById(\'po-new-ov\').remove()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--muted)">✕</button>'
+    +'</div>'
+    +'<div class="g2">'
+    +'<div class="fg"><label>เลขที่ PO</label><input type="text" id="pn-num" placeholder="PO-2026-001"></div>'
+    +'<div class="fg"><label>ซัพพลายเออร์</label><input type="text" id="pn-sup" placeholder="ชื่อร้าน/บริษัท"></div>'
+    +'<div class="fg"><label>วันที่สั่งซื้อ</label><input type="date" id="pn-date" value="'+today()+'"></div>'
+    +'<div class="fg"><label>วันที่คาดว่าจะได้รับ</label><input type="date" id="pn-exp"></div>'
+    +'</div>'
+    +'<div style="margin:12px 0 6px;display:flex;justify-content:space-between;align-items:center;">'
+    +'<div style="font-size:13px;font-weight:600">รายการสินค้า</div>'
+    +'<button class="btn b-ghost b-sm" onclick="addPOItemRow()">➕ เพิ่มรายการ</button>'
+    +'</div>'
+    +'<div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr>'
+    +'<th>ชื่อสินค้า / SKU</th><th style="width:80px">จำนวน</th><th style="width:100px">ราคา/หน่วย</th><th style="width:32px"></th>'
+    +'</tr></thead><tbody id="pn-items">'
+    +'<tr id="pn-row-0"><td><input data-f="name" type="text" placeholder="ชื่อสินค้า" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></td>'
+    +'<td><input data-f="qty" type="number" min="1" value="1" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:right;"></td>'
+    +'<td><input data-f="price" type="number" min="0" value="0" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:right;"></td>'
+    +'<td></td></tr>'
+    +'</tbody></table></div>'
+    +'<div class="fg"><label>หมายเหตุ</label><textarea id="pn-note" rows="2" style="resize:vertical"></textarea></div>'
+    +'<div id="pn-msg" style="font-size:12px;color:var(--co);min-height:18px;margin-bottom:8px;"></div>'
+    +'<div class="btn-row">'
+    +'<button class="btn b-ghost" onclick="document.getElementById(\'po-new-ov\').remove()">ยกเลิก</button>'
+    +'<button class="btn b-pk" onclick="savePOFn()">💾 บันทึก PO</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  window._poRowCount=1;
+}
+
+function addPOItemRow(){
+  var i=window._poRowCount++;
+  var tr=document.createElement('tr');tr.id='pn-row-'+i;
+  tr.innerHTML='<td><input data-f="name" type="text" placeholder="ชื่อสินค้า" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></td>'
+    +'<td><input data-f="qty" type="number" min="1" value="1" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:right;"></td>'
+    +'<td><input data-f="price" type="number" min="0" value="0" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:right;"></td>'
+    +'<td><button onclick="this.closest(\'tr\').remove()" style="border:none;background:none;color:var(--co);cursor:pointer;font-size:16px;">✕</button></td>';
+  document.getElementById('pn-items').appendChild(tr);
+}
+
+async function savePOFn(){
+  var num=document.getElementById('pn-num').value.trim();
+  var sup=document.getElementById('pn-sup').value.trim();
+  var date=document.getElementById('pn-date').value;
+  var exp=document.getElementById('pn-exp').value;
+  var note=document.getElementById('pn-note').value.trim();
+  var msg=document.getElementById('pn-msg');
+  if(!sup){msg.textContent='กรุณากรอกชื่อซัพพลายเออร์';return;}
+  var rows=document.querySelectorAll('#pn-items tr');
+  var items=[];
+  for(var r of rows){
+    var name=(r.querySelector('[data-f="name"]')||{}).value||'';name=name.trim();
+    var qty=Number((r.querySelector('[data-f="qty"]')||{}).value||0);
+    var unitPrice=Number((r.querySelector('[data-f="price"]')||{}).value||0);
+    if(!name)continue;
+    if(qty<=0){msg.textContent='"'+name+'" จำนวนต้องมากกว่า 0';return;}
+    items.push({name:name,qty:qty,unitPrice:unitPrice,receivedQty:0});
+  }
+  if(!items.length){msg.textContent='กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ';return;}
+  msg.textContent='⏳ กำลังบันทึก...';
+  try{
+    await db.collection('purchaseOrders').add({
+      poNumber:num||('PO-'+Date.now().toString(36).toUpperCase()),
+      supplier:sup,orderDate:date,expectedDate:exp,note:note,items:items,
+      status:'pending',createdBy:curUser?curUser.name:'',createdAt:new Date().toISOString()
+    });
+    document.getElementById('po-new-ov').remove();
+    toast('สร้าง PO สำเร็จ','success');
+    logAudit('po','สร้าง PO: '+sup,'success');
+    rPO();
+  }catch(e){msg.textContent='บันทึกไม่สำเร็จ: '+e.message;}
+}
+
+async function openReceivePOFn(poId){
+  var snap=await db.collection('purchaseOrders').doc(poId).get();
+  if(!snap.exists){toast('ไม่พบ PO','error');return;}
+  var po=Object.assign({},snap.data(),{id:snap.id});
+  var ov=document.createElement('div');
+  ov.id='po-recv-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800;display:flex;align-items:center;justify-content:center;padding:16px;';
+  var itemRows=(po.items||[]).map(function(it,i){
+    var rem=it.qty-(it.receivedQty||0);
+    return'<tr><td style="font-weight:600">'+it.name+'</td>'
+      +'<td style="text-align:center">'+it.qty+'</td>'
+      +'<td style="text-align:center;color:var(--tl)">'+(it.receivedQty||0)+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+(rem>0?'var(--am)':'var(--tl)')+'">'+rem+'</td>'
+      +'<td><input type="number" id="rv-'+i+'" min="0" max="'+rem+'" value="'+rem+'" '+(rem<=0?'disabled':'')+' style="width:80px;padding:5px 8px;border:1.5px solid var(--bl);border-radius:6px;font-size:13px;text-align:right;"></td></tr>';
+  }).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:600px;width:100%;max-height:90vh;overflow:auto;padding:22px 24px;">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+    +'<div style="font-size:16px;font-weight:700">📥 รับสินค้าเข้า — '+po.poNumber+'</div>'
+    +'<button onclick="document.getElementById(\'po-recv-ov\').remove()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--muted)">✕</button>'
+    +'</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-bottom:14px">ซัพพลายเออร์: <b style="color:var(--text)">'+po.supplier+'</b></div>'
+    +'<div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr>'
+    +'<th>สินค้า</th><th style="text-align:center">สั่ง</th><th style="text-align:center">รับแล้ว</th><th style="text-align:center">คงเหลือ</th><th style="text-align:center">รับครั้งนี้</th>'
+    +'</tr></thead><tbody>'+itemRows+'</tbody></table></div>'
+    +'<div class="fg"><label>หมายเหตุการรับสินค้า</label><input type="text" id="rv-note" placeholder="หมายเหตุ..."></div>'
+    +'<div id="rv-msg" style="font-size:12px;color:var(--co);min-height:18px;margin-bottom:8px;"></div>'
+    +'<div class="btn-row">'
+    +'<button class="btn b-ghost" onclick="document.getElementById(\'po-recv-ov\').remove()">ยกเลิก</button>'
+    +'<button class="btn b-tl" onclick="confirmReceivePOFn(\''+poId+'\')">✔ ยืนยันรับสินค้า</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  window._recvPO=po;
+}
+
+async function confirmReceivePOFn(poId){
+  var po=window._recvPO;if(!po)return;
+  var msg=document.getElementById('rv-msg');
+  var note=document.getElementById('rv-note').value.trim();
+  var updItems=(po.items||[]).map(function(it,i){
+    var inp=document.getElementById('rv-'+i);
+    var recvNow=Math.min(Number(inp?inp.value:0),it.qty-(it.receivedQty||0));
+    return Object.assign({},it,{receivedQty:(it.receivedQty||0)+Math.max(0,recvNow)});
+  });
+  var allRecv=updItems.every(function(it){return it.receivedQty>=it.qty;});
+  var anyRecv=updItems.some(function(it){return it.receivedQty>0;});
+  var newStatus=allRecv?'received':(anyRecv?'partial':'pending');
+  msg.textContent='⏳ กำลังบันทึก...';
+  try{
+    var upd={items:updItems,status:newStatus};
+    if(note)upd.receiveNote=note;
+    if(allRecv)upd.receivedAt=today();
+    await db.collection('purchaseOrders').doc(poId).update(upd);
+    document.getElementById('po-recv-ov').remove();
+    toast(allRecv?'✅ รับสินค้าครบแล้ว!':'📥 บันทึกการรับสินค้าสำเร็จ','success');
+    logAudit('po','รับสินค้า PO: '+po.poNumber+(allRecv?' — ครบแล้ว':''),'success');
+    rPO();
+  }catch(e){msg.textContent='บันทึกไม่สำเร็จ: '+e.message;}
+}
+
+async function viewPOFn(poId){
+  var snap=await db.collection('purchaseOrders').doc(poId).get();
+  if(!snap.exists){toast('ไม่พบ PO','error');return;}
+  var po=Object.assign({},snap.data(),{id:snap.id});
+  var st=PO_ST[po.status]||PO_ST.pending;
+  var total=(po.items||[]).reduce(function(s,it){return s+Number(it.unitPrice||0)*Number(it.qty||0);},0);
+  var ov=document.createElement('div');
+  ov.id='po-view-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:600px;width:100%;max-height:90vh;overflow:auto;padding:22px 24px;">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+    +'<div style="font-size:16px;font-weight:700">🔍 '+po.poNumber+'</div>'
+    +'<button onclick="document.getElementById(\'po-view-ov\').remove()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--muted)">✕</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:14px;">'
+    +'<span>ซัพพลายเออร์: <b style="color:var(--text)">'+po.supplier+'</b></span>'
+    +'<span>วันที่สั่ง: <b style="color:var(--text)">'+po.orderDate+'</b></span>'
+    +'<span>วันที่คาด: <b style="color:var(--text)">'+(po.expectedDate||'-')+'</b></span>'
+    +(po.receivedAt?'<span>รับครบ: <b style="color:var(--tl)">'+po.receivedAt+'</b></span>':'')
+    +'<span>สถานะ: <span class="badge '+st.cls+'">'+st.label+'</span></span>'
+    +'</div>'
+    +'<div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr>'
+    +'<th>สินค้า</th><th style="text-align:center">สั่ง</th><th style="text-align:right">ราคา/หน่วย</th><th style="text-align:right">มูลค่า</th><th style="text-align:center">รับแล้ว</th><th style="text-align:center">คงเหลือ</th>'
+    +'</tr></thead><tbody>'
+    +(po.items||[]).map(function(it){
+      var rem=it.qty-(it.receivedQty||0);
+      return'<tr><td style="font-weight:600">'+it.name+'</td>'
+        +'<td style="text-align:center">'+it.qty+'</td>'
+        +'<td style="text-align:right;font-size:12px">'+fmtB(it.unitPrice||0)+'</td>'
+        +'<td style="text-align:right;font-weight:600">'+fmtB(Number(it.qty)*Number(it.unitPrice||0))+'</td>'
+        +'<td style="text-align:center;color:var(--tl);font-weight:700">'+(it.receivedQty||0)+'</td>'
+        +'<td style="text-align:center;font-weight:700;color:'+(rem>0?'var(--am)':'var(--tl)')+'">'+rem+'</td></tr>';
+    }).join('')
+    +'<tr style="background:var(--bg)"><td colspan="3" style="text-align:right;font-weight:700">รวมมูลค่า</td>'
+    +'<td style="text-align:right;font-weight:700;color:var(--pk-d)">'+fmtB(total)+'</td><td colspan="2"></td></tr>'
+    +'</tbody></table></div>'
+    +(po.note?'<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">หมายเหตุ: '+po.note+'</div>':'')
+    +(po.receiveNote?'<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">หมายเหตุรับสินค้า: '+po.receiveNote+'</div>':'')
+    +'<div class="btn-row">'
+    +(po.status!=='received'&&po.status!=='cancelled'?'<button class="btn b-tl" onclick="document.getElementById(\'po-view-ov\').remove();openReceivePOFn(\''+po.id+'\')">📥 รับสินค้า</button>':'')
+    +(po.status!=='received'?'<button class="btn b-ghost" style="color:var(--co)" onclick="cancelPOFn(\''+po.id+'\')">ยกเลิก PO</button>':'')
+    +'<button class="btn b-ghost" onclick="document.getElementById(\'po-view-ov\').remove()">ปิด</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+}
+
+async function cancelPOFn(poId){
+  if(!confirm('ยืนยันยกเลิก PO นี้?'))return;
+  await db.collection('purchaseOrders').doc(poId).update({status:'cancelled'});
+  document.getElementById('po-view-ov').remove();
+  toast('ยกเลิก PO แล้ว','warn');
+  rPO();
+}
+
 </script>
 </body>
 </html>
