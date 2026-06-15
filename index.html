@@ -1075,6 +1075,35 @@ function rManage(){
   }).join('');
 }
 
+var _dragSrcId=null,_dragSorted=[];
+function mgDragStart(e){
+  _dragSrcId=e.currentTarget.dataset.id;
+  _dragSorted=items.slice().sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+}
+function mgDragOver(e){
+  e.preventDefault();e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('#mg-body tr').forEach(function(r){r.classList.remove('drag-over');});
+  e.currentTarget.classList.add('drag-over');
+}
+function mgDragEnd(e){
+  document.querySelectorAll('#mg-body tr').forEach(function(r){r.classList.remove('dragging','drag-over');});
+}
+function mgDrop(e){
+  e.preventDefault();
+  var targetId=e.currentTarget.dataset.id;
+  if(!_dragSrcId||_dragSrcId===targetId)return;
+  var srcIdx=_dragSorted.findIndex(function(i){return i.id===_dragSrcId;});
+  var tgtIdx=_dragSorted.findIndex(function(i){return i.id===targetId;});
+  if(srcIdx<0||tgtIdx<0)return;
+  var moved=_dragSorted.splice(srcIdx,1)[0];
+  _dragSorted.splice(tgtIdx,0,moved);
+  var promises=_dragSorted.map(function(it,idx){
+    return db.collection('items').doc(it.id).update({sortOrder:idx+1});
+  });
+  Promise.all(promises).then(function(){toast('เรียงลำดับเรียบร้อย','success');});
+}
 function go(name){
   var names=['stock','receive','issue','approve','history','report','manage','po','plan','trend','audit','users','warehouse'];
   document.querySelectorAll('.nav-item').forEach(function(t,i){t.classList.toggle('active',names[i]===name);});
