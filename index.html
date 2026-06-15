@@ -33,6 +33,10 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);fon
 .nav-badge{margin-left:auto;background:var(--am);color:#fff;border-radius:99px;padding:1px 7px;font-size:10px;font-weight:700;display:none}
 .nav-section{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:8px 12px 4px;margin-top:8px}
 .panel{display:none}.panel.active{display:block}
+.drag-handle{cursor:grab;color:var(--muted);font-size:16px;padding:0 6px;user-select:none;line-height:1}
+.drag-handle:active{cursor:grabbing}
+tr.dragging{opacity:.4;background:var(--pk-l)}
+tr.drag-over td{border-top:2px solid var(--pk)}
 .page-title{font-size:20px;font-weight:700;margin-bottom:4px}
 .page-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
@@ -201,7 +205,7 @@ tbody tr:hover{background:#FAFAF8}
           <button class="btn b-ghost b-sm" onclick="exportStockCSV()">⬇ Export</button>
         </div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th style="width:22%">สินค้า</th><th style="width:7%">หน่วย</th><th style="width:8%">หมวด</th><th style="width:7%">คงเหลือ</th><th style="width:7%">ขั้นต่ำ</th><th style="width:9%">มูลค่า(฿)</th><th style="width:7%">ใช้/วัน</th><th style="width:8%">ใช้/เดือน</th><th style="width:9%">พอใช้(เดือน)</th><th style="width:7%">สถานะ</th><th style="width:9%">จัดการ</th></tr></thead>
+          <thead><tr><th style="width:17%">สินค้า</th><th style="width:6%">หน่วย</th><th style="width:9%">ขนาด</th><th style="width:7%">หมวด</th><th style="width:6%">คงเหลือ</th><th style="width:6%">ขั้นต่ำ</th><th style="width:8%">มูลค่า(฿)</th><th style="width:6%">ใช้/วัน</th><th style="width:7%">ใช้/เดือน</th><th style="width:8%">พอใช้(เดือน)</th><th style="width:6%">สถานะ</th><th style="width:8%">จัดการ</th></tr></thead>
           <tbody id="stock-body"></tbody>
         </table></div>
       </div>
@@ -319,6 +323,7 @@ tbody tr:hover{background:#FAFAF8}
               <div class="fg"><label>สต็อกเริ่มต้น</label><input type="number" id="nw-q" placeholder="0" min="0"></div>
               <div class="fg"><label>จำนวนขั้นต่ำ</label><input type="number" id="nw-m" placeholder="0" min="0"></div>
               <div class="fg full"><label>ราคา/หน่วย (฿)</label><input type="number" id="nw-p" placeholder="0.00" min="0" step="0.01"></div>
+              <div class="fg full"><label>ขนาด/ไดเมนชั่น</label><input type="text" id="nw-dim" placeholder="เช่น 45x60 ซม. / 100Y / 1.8x300 ม."></div>
             </div>
             <div class="btn-row"><button class="btn b-pk" onclick="addItem()">➕ เพิ่มสินค้า</button></div>
           </div>
@@ -338,7 +343,7 @@ tbody tr:hover{background:#FAFAF8}
           <button class="btn b-ghost b-sm" onclick="if(confirm('รีเซ็ตระบบทั้งหมด?'))resetAll()">🔄 รีเซ็ต</button>
         </div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th style="width:30%">ชื่อสินค้า</th><th style="width:9%">หน่วย</th><th style="width:10%">หมวด</th><th style="width:10%">สต็อก</th><th style="width:9%">ขั้นต่ำ</th><th style="width:11%">ราคา/หน่วย</th><th style="width:10%">แก้ไข</th><th style="width:11%">ลบ</th></tr></thead>
+          <thead><tr><th style="width:3%"></th><th style="width:22%">ชื่อสินค้า</th><th style="width:7%">หน่วย</th><th style="width:11%">ขนาด</th><th style="width:8%">หมวด</th><th style="width:8%">สต็อก</th><th style="width:7%">ขั้นต่ำ</th><th style="width:9%">ราคา/หน่วย</th><th style="width:8%">แก้ไข</th><th style="width:8%">ลบ</th></tr></thead>
           <tbody id="mg-body"></tbody>
         </table></div>
       </div>
@@ -547,6 +552,7 @@ tbody tr:hover{background:#FAFAF8}
       <div class="fg"><label>หมวดหมู่</label><select id="ed-cat"><option value="">-- เลือกหมวด --</option></select></div>
     </div>
     <div class="fg"><label>หมายเหตุ</label><input type="text" id="ed-note" placeholder="เหตุผล..."></div>
+    <div class="fg"><label>ขนาด/ไดเมนชั่น</label><input type="text" id="ed-dim" placeholder="เช่น 45x60 ซม."></div>
     <div class="modal-foot" style="margin-top:16px">
       <button class="btn b-ghost" onclick="editClose()">ยกเลิก</button>
       <button class="btn b-pp" onclick="editSave()">✔ บันทึก</button>
@@ -961,7 +967,7 @@ function rStock(){
   }).sort(function(a,b){return a.name.localeCompare(b.name,'th');});
   var tv=0;items.forEach(function(i){tv+=i.qty*(i.price||0);});
   var tel=document.getElementById('total-val');if(tel)tel.textContent='มูลค่าสต็อกรวม: '+fmtB(tv);
-  if(!f.length){b.innerHTML='<tr><td colspan="11" class="empty">ไม่พบข้อมูล</td></tr>';return;}
+  if(!f.length){b.innerHTML='<tr><td colspan="12" class="empty">ไม่พบข้อมูล</td></tr>';return;}
   b.innerHTML=f.map(function(it){
     var val=it.qty*(it.price||0);
     var pct=it.minQty>0?Math.min(100,Math.round(it.qty/it.minQty*100)):100;
@@ -972,7 +978,9 @@ function rStock(){
     var mLeftStr=mLeft===null?'∞':mLeft.toFixed(1);
     var mLeftColor=mLeft===null?'var(--muted)':mLeft<1?'#D85A30':mLeft<2?'#BA7517':'#1D9E75';
     return'<tr><td style="font-weight:600"><div style="overflow:hidden;text-overflow:ellipsis" title="'+it.name+'">'+it.name+'</div><div class="prog"><div class="prog-fill" style="width:'+pct+'%;background:'+bc+'"></div></div></td>'
-      +'<td style="color:var(--muted)">'+it.unit+'</td><td>'+catChip(it.catId)+'</td>'
+      +'<td style="color:var(--muted)">'+it.unit+'</td>'
+      +'<td style="color:var(--muted);font-size:12px">'+(it.dim||'')+'</td>'
+      +'<td>'+catChip(it.catId)+'</td>'
       +'<td class="'+(it.qty<=0?'neg':'')+'" style="font-weight:700">'+it.qty.toLocaleString()+'</td>'
       +'<td style="color:var(--muted)">'+it.minQty.toLocaleString()+'</td>'
       +'<td style="color:var(--muted);font-size:12px">'+fmtB(val)+'</td>'
@@ -1142,6 +1150,7 @@ function openEditFn(id){
   _eid=id;
   document.getElementById('ed-name').value=it.name;document.getElementById('ed-qty').value=it.qty;
   document.getElementById('ed-min').value=it.minQty;document.getElementById('ed-price').value=it.price||0;document.getElementById('ed-note').value='';
+  document.getElementById('ed-dim').value=it.dim||'';
   fillCatSels();document.getElementById('ed-cat').value=it.catId||'';
   document.getElementById('modal-edit').classList.add('show');
 }
@@ -1153,7 +1162,8 @@ function editSave(){
   var note=document.getElementById('ed-note').value||'ปรับสต็อกโดยตรง';
   var diff=Math.abs(nq-it.qty);
   addTxn({type:'adjust',itemId:it.id,itemName:it.name,qty:diff,date:today(),by:curUser.name,dept:'',doc:'',note:note+' ('+it.qty+'\u2192'+nq+')',price:np});
-  saveItem(Object.assign({},it,{qty:nq,minQty:nm,price:np,catId:nc}));
+  var ndim=document.getElementById('ed-dim').value.trim();
+  saveItem(Object.assign({},it,{qty:nq,minQty:nm,price:np,catId:nc,dim:ndim}));
   logAudit('edit_item','แก้ไขสินค้า: '+(it?it.name:'?')+' qty:'+it.qty+'>'+nq);
   editClose();toast('แก้ไขสินค้าเรียบร้อย','success');
 }
@@ -1240,8 +1250,10 @@ function addItem(){
   var price=parseFloat(document.getElementById('nw-p').value)||0,catId=document.getElementById('nw-cat').value||null;
   if(!name||!unit){toast('กรุณากรอกชื่อและหน่วย','error');return;}
   if(items.some(function(i){return i.name===name;})){toast('ชื่อนี้มีอยู่แล้ว','error');return;}
-  saveItem({id:genId(),name:name,unit:unit,qty:qty,minQty:minQty,price:price,catId:catId});
-  ['nw-n','nw-u','nw-q','nw-m','nw-p'].forEach(function(id){document.getElementById(id).value='';});
+  var dim=document.getElementById('nw-dim').value.trim();
+  var maxOrder=items.reduce(function(m,i){return Math.max(m,i.sortOrder||0);},0);
+  saveItem({id:genId(),name:name,unit:unit,qty:qty,minQty:minQty,price:price,catId:catId,dim:dim,sortOrder:maxOrder+1});
+  ['nw-n','nw-u','nw-q','nw-m','nw-p','nw-dim'].forEach(function(id){document.getElementById(id).value='';});
   logAudit('add_item','เพิ่มสินค้า: '+name);
   toast('เพิ่มสินค้าเรียบร้อย','success');
 }
