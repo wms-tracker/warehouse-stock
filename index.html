@@ -324,6 +324,7 @@ tbody tr:hover{background:#FAFAF8}
               <div class="fg"><label>จำนวนขั้นต่ำ</label><input type="number" id="nw-m" placeholder="0" min="0"></div>
               <div class="fg full"><label>ราคา/หน่วย (฿)</label><input type="number" id="nw-p" placeholder="0.00" min="0" step="0.01"></div>
               <div class="fg full"><label>ขนาด/ไดเมนชั่น</label><input type="text" id="nw-dim" placeholder="เช่น 45x60 ซม. / 100Y / 1.8x300 ม."></div>
+              <div class="fg full"><label>Lead Time รอรับสินค้า (วัน)</label><input type="number" id="nw-lt" placeholder="เช่น 7" min="0"></div>
             </div>
             <div class="btn-row"><button class="btn b-pk" onclick="addItem()">➕ เพิ่มสินค้า</button></div>
           </div>
@@ -343,7 +344,7 @@ tbody tr:hover{background:#FAFAF8}
           <button class="btn b-ghost b-sm" onclick="if(confirm('รีเซ็ตระบบทั้งหมด?'))resetAll()">🔄 รีเซ็ต</button>
         </div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th style="width:3%"></th><th style="width:22%">ชื่อสินค้า</th><th style="width:7%">หน่วย</th><th style="width:11%">ขนาด</th><th style="width:8%">หมวด</th><th style="width:8%">สต็อก</th><th style="width:7%">ขั้นต่ำ</th><th style="width:9%">ราคา/หน่วย</th><th style="width:8%">แก้ไข</th><th style="width:8%">ลบ</th></tr></thead>
+          <thead><tr><th style="width:3%"></th><th style="width:20%">ชื่อสินค้า</th><th style="width:6%">หน่วย</th><th style="width:10%">ขนาด</th><th style="width:7%">หมวด</th><th style="width:6%">สต็อก</th><th style="width:6%">ขั้นต่ำ</th><th style="width:8%">ราคา/หน่วย</th><th style="width:7%">Lead Time</th><th style="width:7%">แก้ไข</th><th style="width:7%">ลบ</th></tr></thead>
           <tbody id="mg-body"></tbody>
         </table></div>
       </div>
@@ -373,15 +374,16 @@ tbody tr:hover{background:#FAFAF8}
         </div>
         <div class="tbl-wrap"><table>
           <thead><tr>
-            <th style="width:22%">สินค้า</th>
-            <th style="width:8%">หน่วย</th>
-            <th style="width:10%">สต็อก</th>
-            <th style="width:10%">ยอดใช้/เดือน</th>
-            <th style="width:9%">สั่ง 1 เดือน</th>
-            <th style="width:9%">สั่ง 2 เดือน</th>
-            <th style="width:9%">สั่ง 3 เดือน</th>
-            <th style="width:10%">ขั้นต่ำแนะนำ</th>
-            <th style="width:13%">สร้าง PO</th>
+            <th style="width:20%">สินค้า</th>
+            <th style="width:6%">หน่วย</th>
+            <th style="width:8%">สต็อก</th>
+            <th style="width:9%">ใช้/เดือน</th>
+            <th style="width:8%">Lead Time</th>
+            <th style="width:10%">สต็อกคงอีก</th>
+            <th style="width:10%">ควรสั่งใน</th>
+            <th style="width:9%">จำนวนแนะนำ</th>
+            <th style="width:9%">ขั้นต่ำแนะนำ</th>
+            <th style="width:11%">สร้าง PO</th>
           </tr></thead>
           <tbody id="plan-body"></tbody>
         </table></div>
@@ -553,6 +555,7 @@ tbody tr:hover{background:#FAFAF8}
     </div>
     <div class="fg"><label>หมายเหตุ</label><input type="text" id="ed-note" placeholder="เหตุผล..."></div>
     <div class="fg"><label>ขนาด/ไดเมนชั่น</label><input type="text" id="ed-dim" placeholder="เช่น 45x60 ซม."></div>
+    <div class="fg"><label>Lead Time รอรับสินค้า (วัน)</label><input type="number" id="ed-lt" placeholder="เช่น 7 หรือ 30" min="0"></div>
     <div class="modal-foot" style="margin-top:16px">
       <button class="btn b-ghost" onclick="editClose()">ยกเลิก</button>
       <button class="btn b-pp" onclick="editSave()">✔ บันทึก</button>
@@ -1151,6 +1154,7 @@ function openEditFn(id){
   document.getElementById('ed-name').value=it.name;document.getElementById('ed-qty').value=it.qty;
   document.getElementById('ed-min').value=it.minQty;document.getElementById('ed-price').value=it.price||0;document.getElementById('ed-note').value='';
   document.getElementById('ed-dim').value=it.dim||'';
+  document.getElementById('ed-lt').value=it.leadTime||'';
   fillCatSels();document.getElementById('ed-cat').value=it.catId||'';
   document.getElementById('modal-edit').classList.add('show');
 }
@@ -1163,7 +1167,8 @@ function editSave(){
   var diff=Math.abs(nq-it.qty);
   addTxn({type:'adjust',itemId:it.id,itemName:it.name,qty:diff,date:today(),by:curUser.name,dept:'',doc:'',note:note+' ('+it.qty+'\u2192'+nq+')',price:np});
   var ndim=document.getElementById('ed-dim').value.trim();
-  saveItem(Object.assign({},it,{qty:nq,minQty:nm,price:np,catId:nc,dim:ndim}));
+  var nlt=parseInt(document.getElementById('ed-lt').value)||0;
+  saveItem(Object.assign({},it,{qty:nq,minQty:nm,price:np,catId:nc,dim:ndim,leadTime:nlt}));
   logAudit('edit_item','แก้ไขสินค้า: '+(it?it.name:'?')+' qty:'+it.qty+'>'+nq);
   editClose();toast('แก้ไขสินค้าเรียบร้อย','success');
 }
@@ -1252,8 +1257,9 @@ function addItem(){
   if(items.some(function(i){return i.name===name;})){toast('ชื่อนี้มีอยู่แล้ว','error');return;}
   var dim=document.getElementById('nw-dim').value.trim();
   var maxOrder=items.reduce(function(m,i){return Math.max(m,i.sortOrder||0);},0);
-  saveItem({id:genId(),name:name,unit:unit,qty:qty,minQty:minQty,price:price,catId:catId,dim:dim,sortOrder:maxOrder+1});
-  ['nw-n','nw-u','nw-q','nw-m','nw-p','nw-dim'].forEach(function(id){document.getElementById(id).value='';});
+  var lt=parseInt(document.getElementById('nw-lt').value)||0;
+  saveItem({id:genId(),name:name,unit:unit,qty:qty,minQty:minQty,price:price,catId:catId,dim:dim,leadTime:lt,sortOrder:maxOrder+1});
+  ['nw-n','nw-u','nw-q','nw-m','nw-p','nw-dim','nw-lt'].forEach(function(id){document.getElementById(id).value='';});
   logAudit('add_item','เพิ่มสินค้า: '+name);
   toast('เพิ่มสินค้าเรียบร้อย','success');
 }
@@ -1596,37 +1602,52 @@ function calcPlan() {
 
   var rows = items.map(function(it) {
     var avg = getMonthlyUsage(it.id, months);
+    var avgDay = avg > 0 ? avg / 30 : 0;
     var avgBuf = Math.ceil(avg * (1 + buffer));
-    var need1 = Math.max(0, avgBuf - it.qty);
-    var need2 = Math.max(0, avgBuf * 2 - it.qty);
-    var need3 = Math.max(0, avgBuf * 3 - it.qty);
-    var minRec = Math.ceil(avgBuf * 1.5); // 1.5 months buffer as minimum
+    var lt = it.leadTime || 0;
+    // days of stock remaining
+    var daysLeft = avgDay > 0 ? Math.round(it.qty / avgDay) : null;
+    // days until must order (daysLeft - leadTime)
+    var orderInDays = daysLeft !== null ? daysLeft - lt : null;
+    // recommended order qty: cover leadTime + 1 month buffer
+    var needLT = avgDay > 0 ? Math.max(0, Math.ceil(avgDay * (lt + 30 * (1 + buffer))) - it.qty) : 0;
+    var minRec = Math.ceil(avgBuf * 1.5);
     totalAvg += avg;
-    val1 += need1 * (it.price || 0);
-    if (need1 > 0) needCnt++;
-    return { it: it, avg: avg, avgBuf: avgBuf, need1: need1, need2: need2, need3: need3, minRec: minRec };
+    val1 += needLT * (it.price || 0);
+    if (needLT > 0) needCnt++;
+    return { it: it, avg: avg, avgDay: avgDay, lt: lt, daysLeft: daysLeft, orderInDays: orderInDays, needLT: needLT, minRec: minRec };
   });
 
   document.getElementById('plan-avg-total').textContent = Math.round(totalAvg).toLocaleString();
   document.getElementById('plan-val1').textContent = '฿' + Math.round(val1).toLocaleString();
   document.getElementById('plan-need-cnt').textContent = needCnt;
 
-  if (!rows.length) { b.innerHTML = '<tr><td colspan="9" class="empty">ไม่มีข้อมูล</td></tr>'; return; }
+  if (!rows.length) { b.innerHTML = '<tr><td colspan="10" class="empty">ไม่มีข้อมูล</td></tr>'; return; }
 
   b.innerHTML = rows.map(function(r) {
     var it = r.it;
-    var needColor = r.need1 > 0 ? 'color:var(--co);font-weight:600' : 'color:var(--muted)';
-    return '<tr>'
+    // urgency color for "order within"
+    var urgColor = 'color:var(--muted)';
+    var urgText = r.orderInDays === null ? '∞' : r.orderInDays + ' วัน';
+    var rowStyle = '';
+    if (r.orderInDays !== null) {
+      if (r.orderInDays <= 0) { urgColor = 'color:#fff;font-weight:700'; rowStyle = 'background:var(--co-l)'; urgText = '🔴 เกินกำหนด!'; }
+      else if (r.orderInDays <= r.lt) { urgColor = 'color:var(--am-d);font-weight:700'; urgText = '⚠ ' + r.orderInDays + ' วัน'; }
+    }
+    var daysLeftStr = r.daysLeft === null ? '∞' : r.daysLeft + ' วัน';
+    var daysLeftColor = r.daysLeft === null ? 'var(--muted)' : r.daysLeft <= r.lt ? 'var(--co)' : r.daysLeft <= r.lt * 2 ? 'var(--am)' : 'var(--tl)';
+    return '<tr style="' + rowStyle + '">'
       + '<td style="font-weight:600" title="' + it.name + '"><div style="overflow:hidden;text-overflow:ellipsis">' + it.name + '</div></td>'
       + '<td style="color:var(--muted)">' + it.unit + '</td>'
       + '<td style="font-weight:600;' + (it.qty <= it.minQty ? 'color:var(--co)' : '') + '">' + it.qty.toLocaleString() + '</td>'
-      + '<td style="color:var(--tl-d);font-weight:600">' + r.avg.toLocaleString() + '</td>'
-      + '<td style="' + needColor + '">' + r.need1.toLocaleString() + '</td>'
-      + '<td style="color:var(--muted)">' + r.need2.toLocaleString() + '</td>'
-      + '<td style="color:var(--muted)">' + r.need3.toLocaleString() + '</td>'
-      + '<td style="color:var(--pp-d);font-weight:600">' + r.minRec.toLocaleString() + '</td>'
-      + '<td>' + (r.need1 > 0
-        ? '<button class="btn b-tl b-sm" data-id="' + it.id + '" data-need="' + r.need1 + '" onclick="openPO(this.dataset.id,this.dataset.need)">📄 PO</button>'
+      + '<td style="color:var(--tl-d);font-weight:600">' + (r.avg > 0 ? r.avg.toLocaleString() : '<span style="color:var(--muted)">-</span>') + '</td>'
+      + '<td style="color:var(--bl-d);text-align:center">' + (r.lt > 0 ? r.lt + ' วัน' : '<span style="color:var(--muted)">-</span>') + '</td>'
+      + '<td style="font-weight:600;text-align:center;color:' + daysLeftColor + '">' + daysLeftStr + '</td>'
+      + '<td style="text-align:center;' + urgColor + '">' + urgText + '</td>'
+      + '<td style="color:var(--co);font-weight:600;text-align:center">' + (r.needLT > 0 ? r.needLT.toLocaleString() : '<span style="color:var(--muted)">พอแล้ว</span>') + '</td>'
+      + '<td style="color:var(--pp-d);font-weight:600;text-align:center">' + r.minRec.toLocaleString() + '</td>'
+      + '<td>' + (r.needLT > 0
+        ? '<button class="btn b-tl b-sm" data-id="' + it.id + '" data-need="' + r.needLT + '" onclick="openPO(this.dataset.id,this.dataset.need)">📄 PO</button>'
         : '<span style="color:var(--muted);font-size:12px">พอแล้ว</span>')
       + '</td></tr>';
   }).join('');
