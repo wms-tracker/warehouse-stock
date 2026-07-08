@@ -372,17 +372,23 @@ tbody tr:hover{background:#FAFAF8}
           <div class="stat-card pk"><div class="stat-label">มูลค่าสั่งซื้อ 1 เดือน (฿)</div><div class="stat-num" id="plan-val1">0</div></div>
           <div class="stat-card co"><div class="stat-label">รายการที่ต้องสั่งซื้อ</div><div class="stat-num" id="plan-need-cnt">0</div></div>
         </div>
+                <div id="plan-bulk-bar" style="display:none;align-items:center;gap:10px;margin-bottom:10px;padding:10px 14px;background:var(--pk-l);border:1px solid var(--pk-m);border-radius:10px;">
+          <span id="plan-bulk-cnt" style="font-size:13px;font-weight:600;color:var(--pk-d)">0 รายการที่เลือก</span>
+          <button class="btn b-pk" onclick="openBulkPOFn()">🛒 สร้าง PO รวม</button>
+          <button class="btn b-ghost b-sm" onclick="planClearSel()">ยกเลิกการเลือก</button>
+        </div>
         <div class="tbl-wrap"><table>
           <thead><tr>
-            <th style="width:18%">สินค้า</th>
+            <th style="width:3%"><input type="checkbox" id="plan-chk-all" onchange="planToggleAll(this.checked)" title="เลือกทั้งหมด"></th>
+            <th style="width:17%">สินค้า</th>
             <th style="width:5%">หน่วย</th>
-            <th style="width:7%">สต็อก</th>
-            <th style="width:8%">ใช้/เดือน</th>
-            <th style="width:7%">Lead Time</th>
-            <th style="width:8%">สต็อกคงอีก</th>
-            <th style="width:8%">ควรสั่งใน</th>
-            <th style="width:9%">ยอดสั่ง(PO)</th>
-            <th style="width:8%">จำนวนแนะนำ</th>
+            <th style="width:6%">สต็อก</th>
+            <th style="width:7%">ใช้/เดือน</th>
+            <th style="width:6%">Lead Time</th>
+            <th style="width:7%">สต็อกคงอีก</th>
+            <th style="width:7%">ควรสั่งใน</th>
+            <th style="width:8%">ยอดสั่ง(PO)</th>
+            <th style="width:7%">จำนวนแนะนำ</th>
             <th style="width:8%">ขั้นต่ำแนะนำ</th>
             <th style="width:9%">สร้าง PO</th>
           </tr></thead>
@@ -1656,7 +1662,8 @@ async function calcPlan() {
     }
     var daysLeftStr = r.daysLeft === null ? '∞' : r.daysLeft + ' วัน';
     var daysLeftColor = r.daysLeft === null ? 'var(--muted)' : r.daysLeft <= r.lt ? 'var(--co)' : r.daysLeft <= r.lt * 2 ? 'var(--am)' : 'var(--tl)';
-    return '<tr style="' + rowStyle + '">'
+    return '<tr style="' + rowStyle + '" data-item-name="' + it.name + '" data-item-need="' + r.needLT + '" data-item-price="' + (it.price||0) + '">'
+      + '<td style="text-align:center"><input type="checkbox" class="plan-chk" data-id="' + it.id + '" onchange="planChkChange()"></td>'
       + '<td style="font-weight:600" title="' + it.name + '"><div style="overflow:hidden;text-overflow:ellipsis">' + it.name + '</div></td>'
       + '<td style="color:var(--muted)">' + it.unit + '</td>'
       + '<td style="font-weight:600;' + (it.qty <= it.minQty ? 'color:var(--co)' : '') + '">' + it.qty.toLocaleString() + '</td>'
@@ -1674,6 +1681,73 @@ async function calcPlan() {
   }).join('');
 }
 
+function planChkChange(){
+  var chks=document.querySelectorAll('.plan-chk:checked');
+  var bar=document.getElementById('plan-bulk-bar');
+  var cnt=document.getElementById('plan-bulk-cnt');
+  if(chks.length>0){bar.style.display='flex';cnt.textContent=chks.length+' รายการที่เลือก';}
+  else{bar.style.display='none';}
+}
+function planToggleAll(v){
+  document.querySelectorAll('.plan-chk').forEach(function(c){c.checked=v;});
+  planChkChange();
+}
+function planClearSel(){
+  document.querySelectorAll('.plan-chk').forEach(function(c){c.checked=false;});
+  var allChk=document.getElementById('plan-chk-all');if(allChk)allChk.checked=false;
+  document.getElementById('plan-bulk-bar').style.display='none';
+}
+function openBulkPOFn(){
+  var chks=document.querySelectorAll('.plan-chk:checked');
+  if(!chks.length){toast('กรุณาเลือกรายการ','error');return;}
+  var selItems=[];
+  chks.forEach(function(c){
+    var row=c.closest('tr');
+    var name=row.dataset.itemName||'';
+    var need=parseInt(row.dataset.itemNeed)||1;
+    var price=parseFloat(row.dataset.itemPrice)||0;
+    var it=items.find(function(i){return i.name===name;});
+    selItems.push({name:name,qty:need>0?need:1,price:price,it:it});
+  });
+  // Build PO rows HTML
+  var rowsHtml=selItems.map(function(s,i){
+    return '<tr id="pn-row-'+i+'">'
+      +'<td><input data-f="name" type="text" value="'+s.name+'" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></td>'
+      +'<td><input data-f="qty" type="number" min="1" value="'+s.qty+'" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:right;"></td>'
+      +'<td><input data-f="price" type="number" min="0" value="'+s.price+'" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:right;"></td>'
+      +'<td><button onclick="this.closest(\'tr\').remove()" style="border:none;background:none;color:var(--co);cursor:pointer;font-size:16px;">✕</button></td></tr>';
+  }).join('');
+  window._poRowCount=selItems.length;
+  var ov=document.createElement('div');
+  ov.id='po-new-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:620px;width:100%;max-height:90vh;overflow:auto;padding:22px 24px;">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+    +'<div style="font-size:16px;font-weight:700">🛒 สร้าง PO รวม ('+selItems.length+' รายการ)</div>'
+    +'<button onclick="document.getElementById(\'po-new-ov\').remove()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--muted)">✕</button>'
+    +'</div>'
+    +'<div class="g2">'
+    +'<div class="fg"><label>เลขที่ PO</label><input type="text" id="pn-num" placeholder="PO-2026-001"></div>'
+    +'<div class="fg"><label>ซัพพลายเออร์</label><input type="text" id="pn-sup" placeholder="ชื่อร้าน/บริษัท"></div>'
+    +'<div class="fg"><label>วันที่สั่งซื้อ</label><input type="date" id="pn-date" value="'+today()+'"></div>'
+    +'<div class="fg"><label>วันที่คาดรับสินค้า</label><input type="date" id="pn-exp"></div>'
+    +'</div>'
+    +'<div style="margin:12px 0 6px;display:flex;justify-content:space-between;align-items:center;">'
+    +'<div style="font-size:13px;font-weight:600">รายการสินค้า</div>'
+    +'<button class="btn b-ghost b-sm" onclick="addPOItemRow()">➕ เพิ่มรายการ</button>'
+    +'</div>'
+    +'<div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr>'
+    +'<th>ชื่อสินค้า</th><th style="width:80px">จำนวน</th><th style="width:100px">ราคา/หน่วย</th><th style="width:32px"></th>'
+    +'</tr></thead><tbody id="pn-items">'+rowsHtml+'</tbody></table></div>'
+    +'<div class="fg"><label>หมายเหตุ</label><textarea id="pn-note" rows="2" style="resize:vertical"></textarea></div>'
+    +'<div id="pn-msg" style="font-size:12px;color:var(--co);min-height:18px;margin-bottom:8px;"></div>'
+    +'<div class="btn-row">'
+    +'<button class="btn b-ghost" onclick="document.getElementById(\'po-new-ov\').remove()">ยกเลิก</button>'
+    +'<button class="btn b-pk" onclick="savePOFn()">💾 บันทึก PO</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  planClearSel();
+}
 function applyMinQty() {
   var months = parseInt(document.getElementById('plan-lookback').value);
   var buffer = parseInt(document.getElementById('plan-buffer').value) / 100;
