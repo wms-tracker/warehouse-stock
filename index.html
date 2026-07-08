@@ -374,16 +374,17 @@ tbody tr:hover{background:#FAFAF8}
         </div>
         <div class="tbl-wrap"><table>
           <thead><tr>
-            <th style="width:20%">สินค้า</th>
-            <th style="width:6%">หน่วย</th>
-            <th style="width:8%">สต็อก</th>
-            <th style="width:9%">ใช้/เดือน</th>
-            <th style="width:8%">Lead Time</th>
-            <th style="width:10%">สต็อกคงอีก</th>
-            <th style="width:10%">ควรสั่งใน</th>
-            <th style="width:9%">จำนวนแนะนำ</th>
-            <th style="width:9%">ขั้นต่ำแนะนำ</th>
-            <th style="width:11%">สร้าง PO</th>
+            <th style="width:18%">สินค้า</th>
+            <th style="width:5%">หน่วย</th>
+            <th style="width:7%">สต็อก</th>
+            <th style="width:8%">ใช้/เดือน</th>
+            <th style="width:7%">Lead Time</th>
+            <th style="width:8%">สต็อกคงอีก</th>
+            <th style="width:8%">ควรสั่งใน</th>
+            <th style="width:9%">ยอดสั่ง(PO)</th>
+            <th style="width:8%">จำนวนแนะนำ</th>
+            <th style="width:8%">ขั้นต่ำแนะนำ</th>
+            <th style="width:9%">สร้าง PO</th>
           </tr></thead>
           <tbody id="plan-body"></tbody>
         </table></div>
@@ -1594,17 +1595,36 @@ function getMonthlyUsage(itemId, months) {
   return Math.round(usage / months * 10) / 10;
 }
 
-function calcPlan() {
+async function calcPlan() {
   var months = parseInt(document.getElementById('plan-lookback').value);
   var buffer = parseInt(document.getElementById('plan-buffer').value) / 100;
   var b = document.getElementById('plan-body');
   var totalAvg = 0, val1 = 0, needCnt = 0;
+  // Load pending/partial POs if not yet loaded
+  if (!_allPOs.length) {
+    try {
+      var snap = await db.collection('purchaseOrders').get();
+      _allPOs = snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    } catch(e) {}
+  }
+  var activePOs = _allPOs.filter(function(po){return po.status==='pending'||po.status==='partial';});
 
   var rows = items.map(function(it) {
     var avg = getMonthlyUsage(it.id, months);
     var avgDay = avg > 0 ? avg / 30 : 0;
     var avgBuf = Math.ceil(avg * (1 + buffer));
     var lt = it.leadTime || 0;
+    // Sum pending order qty from active POs matching this item name
+    var onOrder = 0;
+    var onOrderPOs = [];
+    activePOs.forEach(function(po){
+      (po.items||[]).forEach(function(pi){
+        if(pi.name===it.name){
+          var pending=Math.max(0,(pi.qty||0)-(pi.receivedQty||0));
+          if(pending>0){onOrder+=pending;onOrderPOs.push(po.poNumber||po.id);}
+        }
+      });
+    });
     // days of stock remaining
     var daysLeft = avgDay > 0 ? Math.round(it.qty / avgDay) : null;
     // days until must order (daysLeft - leadTime)
@@ -1615,7 +1635,7 @@ function calcPlan() {
     totalAvg += avg;
     val1 += needLT * (it.price || 0);
     if (needLT > 0) needCnt++;
-    return { it: it, avg: avg, avgDay: avgDay, lt: lt, daysLeft: daysLeft, orderInDays: orderInDays, needLT: needLT, minRec: minRec };
+    return { it: it, avg: avg, avgDay: avgDay, lt: lt, daysLeft: daysLeft, orderInDays: orderInDays, needLT: needLT, minRec: minRec, onOrder: onOrder, onOrderPOs: onOrderPOs };
   });
 
   document.getElementById('plan-avg-total').textContent = Math.round(totalAvg).toLocaleString();
@@ -1644,6 +1664,7 @@ function calcPlan() {
       + '<td style="color:var(--bl-d);text-align:center">' + (r.lt > 0 ? r.lt + ' วัน' : '<span style="color:var(--muted)">-</span>') + '</td>'
       + '<td style="font-weight:600;text-align:center;color:' + daysLeftColor + '">' + daysLeftStr + '</td>'
       + '<td style="text-align:center;' + urgColor + '">' + urgText + '</td>'
+      + '<td style="text-align:center">' + (r.onOrder > 0 ? '<span style="color:var(--bl-d);font-weight:700">+' + r.onOrder.toLocaleString() + '</span><br><span style="font-size:10px;color:var(--muted)">' + r.onOrderPOs.join(', ') + '</span>' : '<span style="color:var(--muted)">-</span>') + '</td>'
       + '<td style="color:var(--co);font-weight:600;text-align:center">' + (r.needLT > 0 ? r.needLT.toLocaleString() : '<span style="color:var(--muted)">พอแล้ว</span>') + '</td>'
       + '<td style="color:var(--pp-d);font-weight:600;text-align:center">' + r.minRec.toLocaleString() + '</td>'
       + '<td>' + (r.needLT > 0
