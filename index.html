@@ -695,9 +695,9 @@ function stopListeners(){
 }
 
 function applyWhFilter(){
-  items=curWH?_allItems.filter(function(i){return i.warehouseId===curWH;}):_allItems;
-  txns=curWH?_allTxns.filter(function(t){return t.warehouseId===curWH;}):_allTxns;
-  pending=curWH?_allPending.filter(function(p){return p.warehouseId===curWH;}):_allPending;
+  items=curWH?_allItems.filter(function(i){return !i.warehouseId||i.warehouseId===curWH;}):_allItems;
+  txns=curWH?_allTxns.filter(function(t){return !t.warehouseId||t.warehouseId===curWH;}):_allTxns;
+  pending=curWH?_allPending.filter(function(p){return !p.warehouseId||p.warehouseId===curWH;}):_allPending;
   refresh();
   updPendBadge();
   if(document.getElementById('panel-history')&&document.getElementById('panel-history').classList.contains('active'))rHist();
