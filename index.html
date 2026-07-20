@@ -1124,10 +1124,18 @@ function mgDrop(e){
   if(srcIdx<0||tgtIdx<0)return;
   var moved=_dragSorted.splice(srcIdx,1)[0];
   _dragSorted.splice(tgtIdx,0,moved);
-  var promises=_dragSorted.map(function(it,idx){
-    return db.collection('items').doc(it.id).update({sortOrder:idx+1});
+  // Update local arrays immediately so rManage renders right away
+  _dragSorted.forEach(function(it,idx){
+    it.sortOrder=idx+1;
+    var ai=_allItems.find(function(x){return x.id===it.id;});
+    if(ai)ai.sortOrder=idx+1;
   });
-  Promise.all(promises).then(function(){toast('เรียงลำดับเรียบร้อย','success');});
+  rManage();
+  toast('เรียงลำดับเรียบร้อย','success');
+  // Save to Firestore in background
+  _dragSorted.forEach(function(it,idx){
+    db.collection('items').doc(it.id).update({sortOrder:idx+1});
+  });
 }
 function go(name){
   var names=['stock','receive','issue','approve','history','report','manage','po','plan','trend','audit','users','warehouse'];
