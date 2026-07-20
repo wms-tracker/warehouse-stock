@@ -1082,14 +1082,21 @@ function rManage(){
   var tv=0;items.forEach(function(i){tv+=i.qty*(i.price||0);});
   var tel=document.getElementById('total-val');if(tel)tel.textContent='มูลค่าสต็อกรวม: '+fmtB(tv);
   var b=document.getElementById('mg-body');
-  b.innerHTML=items.map(function(it){
-    return'<tr><td style="font-weight:600" title="'+it.name+'">'+it.name+'</td>'
-      +'<td style="color:var(--muted)">'+it.unit+'</td><td>'+catChip(it.catId)+'</td>'
+  var sorted=items.slice().sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});
+  b.innerHTML=sorted.map(function(it,idx){
+    return'<tr draggable="true" data-id="'+it.id+'" data-idx="'+idx+'"'
+      +' ondragstart="mgDragStart(event)" ondragover="mgDragOver(event)" ondrop="mgDrop(event)" ondragend="mgDragEnd(event)">'
+      +'<td class="drag-handle" title="ลากเพื่อเรียง">☰</td>'
+      +'<td style="font-weight:600" title="'+it.name+'">'+it.name+'</td>'
+      +'<td style="color:var(--muted)">'+it.unit+'</td>'
+      +'<td style="color:var(--muted);font-size:12px">'+(it.dim||'<span style="opacity:.3">-</span>')+'</td>'
+      +'<td>'+catChip(it.catId)+'</td>'
       +'<td style="font-weight:700">'+it.qty.toLocaleString()+'</td>'
       +'<td style="color:var(--muted)">'+it.minQty.toLocaleString()+'</td>'
       +'<td style="color:var(--muted)">'+(it.price?fmtB(it.price):'-')+'</td>'
-      +'<td><button class="btn b-ghost b-sm" data-id="'+it.id+'" onclick="openEditFn(this.dataset.id)">\u270f แก้ไข</button></td>'
-      +'<td><button class="btn b-ghost b-sm" data-id="'+it.id+'" onclick="reqDelFn(this.dataset.id)" style="color:var(--co)">\ud83d\uddd1 ลบ</button></td></tr>';
+      +'<td style="color:var(--bl-d);font-size:12px;text-align:center">'+(it.leadTime?it.leadTime+' วัน':'<span style="opacity:.3">-</span>')+'</td>'
+      +'<td><button class="btn b-ghost b-sm" data-id="'+it.id+'" onclick="openEditFn(this.dataset.id)">✏ แก้ไข</button></td>'
+      +'<td><button class="btn b-ghost b-sm" data-id="'+it.id+'" onclick="reqDelFn(this.dataset.id)" style="color:var(--co)">🗑 ลบ</button></td></tr>';
   }).join('');
 }
 
