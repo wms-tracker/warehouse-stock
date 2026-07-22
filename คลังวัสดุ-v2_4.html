@@ -678,7 +678,7 @@ async function seedData(){
 
 function startListeners(){
   if('Notification' in window&&Notification.permission==='default'){Notification.requestPermission();}
-  setSyncSt(''load');
+  setSyncSt('load');
   unsubItems=db.collection('items').onSnapshot(function(snap){
     _allItems=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
         var needsSort=_allItems.filter(function(i){return i.sortOrder==null;});
