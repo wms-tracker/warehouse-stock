@@ -347,6 +347,7 @@ tbody tr:hover{background:#FAFAF8}
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <span id="total-val" class="val-badge"></span>
+          <button class="btn b-ghost b-sm" onclick="openImportSheet()">📥 นำเข้าจาก Sheets</button>
           <button class="btn b-ghost b-sm" onclick="if(confirm('รีเซ็ตระบบทั้งหมด?'))resetAll()">🔄 รีเซ็ต</button>
         </div>
         <div class="tbl-wrap"><table>
@@ -1255,7 +1256,149 @@ function startCamera(){
       }catch(e){}
     },200);
   }).catch(function(){toast('ไม่สามารถเปิดกล้องได้','error');});
-}function openEditFn(id){
+}/* ===== Google Sheets Import ===== */
+function openImportSheet(){
+  var ov=document.createElement('div');ov.id='gs-ov';ov.className='ov';
+  ov.innerHTML='<div class="modal" style="max-width:560px">'
+    +'<h3>📥 นำเข้าจาก Google Sheets</h3>'
+    +'<p style="color:var(--muted);font-size:13px">1. เปิด Google Sheets → Share → "Anyone with the link can view"<br>2. วาง URL ด้านล่าง</p>'
+    +'<div class="fg"><label>Google Sheets URL</label>'
+    +'<input id="gs-url" class="inp" placeholder="https://docs.google.com/spreadsheets/d/..." style="font-size:13px"></div>'
+    +'<div class="fg"><label>Sheet (gid) — เว้นว่างสำหรับ Sheet แรก</label>'
+    +'<input id="gs-gid" class="inp" placeholder="0" style="font-size:13px"></div>'
+    +'<div id="gs-msg" style="color:var(--co);font-size:13px;min-height:18px"></div>'
+    +'<div id="gs-map" style="display:none">'
+    +'<p style="font-weight:600;margin:12px 0 6px">แมปคอลัมน์ <span style="font-weight:400;color:var(--muted);font-size:12px">(เลือกว่าคอลัมน์ไหนคือข้อมูลอะไร)</span></p>'
+    +'<div id="gs-map-body" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>'
+    +'<div id="gs-preview" style="margin-top:12px;max-height:200px;overflow:auto"></div>'
+    +'</div>'
+    +'<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="btn b-ghost" onclick="document.getElementById(''gs-ov'').remove()">ยกเลิก</button>'
+    +'<button class="btn b-pr" id="gs-fetch-btn" onclick="fetchSheetData()">📡 ดึงข้อมูล</button>'
+    +'<button class="btn b-pr" id="gs-import-btn" style="display:none" onclick="doImportItems()">✅ Import</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('gs-url').focus();
+}
+
+var _gsData=[];var _gsHeaders=[];
+var GS_FIELDS=[
+  {key:'name',label:'ชื่อสินค้า *',required:true},
+  {key:'unit',label:'หน่วย',required:false},
+  {key:'qty',label:'จำนวนสต็อก',required:false},
+  {key:'minQty',label:'สต็อกขั้นต่ำ',required:false},
+  {key:'price',label:'ราคา/หน่วย',required:false},
+  {key:'dim',label:'ขนาด',required:false},
+  {key:'leadTime',label:'Lead Time (วัน)',required:false},
+  {key:'barcode',label:'บาร์โค้ด',required:false},
+  {key:'skip',label:'— ไม่ใช้ —',required:false}
+];
+
+async function fetchSheetData(){
+  var url=document.getElementById('gs-url').value.trim();
+  var gid=document.getElementById('gs-gid').value.trim()||'0';
+  var msg=document.getElementById('gs-msg');
+  if(!url){msg.textContent='กรุณาใส่ URL';return;}
+  // Extract sheet ID
+  var m=url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if(!m){msg.textContent='URL ไม่ถูกต้อง';return;}
+  var sheetId=m[1];
+  var csvUrl='https://docs.google.com/spreadsheets/d/'+sheetId+'/export?format=csv&gid='+gid;
+  msg.textContent='⏳ กำลังดึงข้อมูล...';
+  document.getElementById('gs-fetch-btn').disabled=true;
+  try{
+    var resp=await fetch(csvUrl);
+    if(!resp.ok)throw new Error('HTTP '+resp.status+' — ตรวจสอบว่า Sheets เป็น Public');
+    var text=await resp.text();
+    var rows=parseCSV(text);
+    if(rows.length<2){msg.textContent='ไม่พบข้อมูล (ต้องมีหัวตารางและข้อมูลอย่างน้อย 1 แถว)';return;}
+    _gsHeaders=rows[0];
+    _gsData=rows.slice(1).filter(function(r){return r.some(function(c){return c.trim();});});
+    msg.textContent='✅ ดึงได้ '+_gsData.length+' แถว — เลือกว่าคอลัมน์ไหนคืออะไร';
+    renderColMap();
+  }catch(e){msg.textContent='ไม่สำเร็จ: '+e.message;}
+  document.getElementById('gs-fetch-btn').disabled=false;
+}
+
+function parseCSV(text){
+  var rows=[];var row=[];var cell='';var inQ=false;
+  for(var i=0;i<text.length;i++){
+    var c=text[i];
+    if(inQ){if(c==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(c==='"'){inQ=false;}else{cell+=c;}}
+    else if(c==='"'){inQ=true;}
+    else if(c===','){row.push(cell);cell='';}
+    else if(c==='\n'){row.push(cell);rows.push(row);row=[];cell='';}
+    else if(c!=='\r'){cell+=c;}
+  }
+  if(cell||row.length){row.push(cell);rows.push(row);}
+  return rows;
+}
+
+function renderColMap(){
+  var body=document.getElementById('gs-map-body');
+  var fields=GS_FIELDS.filter(function(f){return f.key!=='skip';});
+  // Auto-detect columns
+  var autoMap={};
+  var thMap={'ชื่อ':'name','สินค้า':'name','name':'name','item':'name','หน่วย':'unit','unit':'unit','สต็อก':'qty','จำนวน':'qty','qty':'qty','ราคา':'price','price':'price','ขนาด':'dim','dim':'dim','lead':'leadTime','บาร์':'barcode','barcode':'barcode','min':'minQty','ขั้นต่ำ':'minQty'};
+  _gsHeaders.forEach(function(h,i){
+    var low=h.toLowerCase();
+    Object.keys(thMap).forEach(function(k){if(low.includes(k.toLowerCase())){autoMap[i]=autoMap[i]||thMap[k];}});
+  });
+  body.innerHTML=_gsHeaders.map(function(h,i){
+    var opts=GS_FIELDS.map(function(f){
+      var sel=(autoMap[i]===f.key)||(f.key==='skip'&&!autoMap[i]);
+      return'<option value="'+f.key+'"'+(sel?' selected':'')+'>'+f.label+'</option>';
+    }).join('');
+    return'<div><label style="font-size:12px;color:var(--muted)">คอลัมน์: <b>'+h+'</b></label>'
+      +'<select class="inp gs-col-sel" data-col="'+i+'" style="font-size:13px;margin-top:2px">'+opts+'</select></div>';
+  }).join('');
+  // Preview table
+  var prev=document.getElementById('gs-preview');
+  var sample=_gsData.slice(0,3);
+  prev.innerHTML='<p style="font-size:12px;color:var(--muted)">ตัวอย่าง '+sample.length+' แถวแรก:</p>'
+    +'<div class="tbl-wrap"><table class="tbl"><thead><tr>'+_gsHeaders.map(function(h){return'<th>'+h+'</th>';}).join('')+'</tr></thead>'
+    +'<tbody>'+sample.map(function(r){return'<tr>'+_gsHeaders.map(function(_,i){return'<td>'+(r[i]||'')+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
+  document.getElementById('gs-map').style.display='';
+  document.getElementById('gs-import-btn').style.display='';
+}
+
+async function doImportItems(){
+  var btn=document.getElementById('gs-import-btn');
+  var msg=document.getElementById('gs-msg');
+  // Build col→field map
+  var colMap={};
+  document.querySelectorAll('.gs-col-sel').forEach(function(sel){
+    var col=Number(sel.dataset.col);var field=sel.value;
+    if(field&&field!=='skip')colMap[col]=field;
+  });
+  if(!Object.values(colMap).includes('name')){msg.textContent='กรุณาเลือกคอลัมน์ "ชื่อสินค้า"';return;}
+  btn.disabled=true;btn.textContent='⏳ กำลัง Import...';
+  var added=0;var skipped=0;
+  for(var i=0;i<_gsData.length;i++){
+    var row=_gsData[i];
+    var item={};
+    Object.keys(colMap).forEach(function(col){
+      var f=colMap[col];var v=(row[col]||'').trim();
+      if(!v)return;
+      if(f==='qty'||f==='minQty'||f==='price'||f==='leadTime'){item[f]=Number(v.replace(/,/g,''))||0;}
+      else{item[f]=v;}
+    });
+    if(!item.name){skipped++;continue;}
+    // Skip if already exists
+    var exists=_allItems.find(function(x){return x.name===item.name;});
+    if(exists){skipped++;continue;}
+    // Set defaults
+    item.qty=item.qty||0;item.minQty=item.minQty||0;item.price=item.price||0;
+    item.unit=item.unit||'ชิ้น';item.catId=item.catId||'';
+    item.warehouseId=curWH||'';item.createdAt=today();
+    try{await db.collection('items').add(item);added++;}catch(e){skipped++;}
+  }
+  msg.textContent='✅ Import สำเร็จ '+added+' รายการ'+(skipped?' (ข้าม '+skipped+' รายการ)':'');
+  btn.textContent='✅ Import';btn.disabled=false;
+  toast('Import '+added+' รายการเรียบร้อย','success');
+  logAudit('manage','Import จาก Google Sheets: '+added+' รายการ','success');
+}
+/* ===== End Google Sheets Import ===== */function openEditFn(id){
   var it=items.find(function(i){return i.id===id;});if(!it)return;
   _eid=id;
   document.getElementById('ed-name').value=it.name;document.getElementById('ed-qty').value=it.qty;
