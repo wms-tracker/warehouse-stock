@@ -1257,6 +1257,7 @@ function startCamera(){
     },200);
   }).catch(function(){toast('ไม่สามารถเปิดกล้องได้','error');});
 }/* ===== Google Sheets Import ===== */
+function closeGsOv(){var e=document.getElementById('gs-ov');if(e)e.remove();}
 function openImportSheet(){
   var ov=document.createElement('div');ov.id='gs-ov';ov.className='ov';
   ov.innerHTML='<div class="modal" style="max-width:560px">'
@@ -1273,7 +1274,7 @@ function openImportSheet(){
     +'<div id="gs-preview" style="margin-top:12px;max-height:200px;overflow:auto"></div>'
     +'</div>'
     +'<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">'
-    +'<button class="btn b-ghost" onclick="document.getElementById(''gs-ov'').remove()">ยกเลิก</button>'
+    +'<button class="btn b-ghost" onclick="closeGsOv()">ยกเลิก</button>'
     +'<button class="btn b-pr" id="gs-fetch-btn" onclick="fetchSheetData()">📡 ดึงข้อมูล</button>'
     +'<button class="btn b-pr" id="gs-import-btn" style="display:none" onclick="doImportItems()">✅ Import</button>'
     +'</div></div>';
