@@ -77,7 +77,7 @@ tr.drag-over td{border-top:2px solid var(--pk)}
 .sr input{flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Sarabun',sans-serif;font-size:13px;background:#fff}
 .sr input:focus{outline:none;border-color:var(--pk);box-shadow:0 0 0 3px var(--pk-l)}
 .sr select{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Sarabun',sans-serif;font-size:13px;background:#fff;cursor:pointer}
-.tbl-wrap{overflow-x:auto;border-radius:12px;border:1px solid var(--border)}
+.tbl-wrap{overflow-x:auto;border-radius:12px;border:1px solid var(--border)}.tbl-wrap.sticky-hd{max-height:70vh;overflow-y:auto}.tbl-wrap.sticky-hd thead th{position:sticky;top:0;z-index:2;background:var(--card)}
 table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;background:#fff}
 thead{background:var(--bg)}
 th{padding:10px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
@@ -210,7 +210,7 @@ tbody tr:hover{background:#FAFAF8}
           <select id="sc-cat" onchange="rStock()"><option value="">ทุกหมวด</option></select>
           <button class="btn b-ghost b-sm" onclick="exportStockCSV()">⬇ Export</button>
         </div>
-        <div class="tbl-wrap"><table>
+        <div class="tbl-wrap sticky-hd"><table>
           <thead><tr><th style="width:17%">สินค้า</th><th style="width:6%">หน่วย</th><th style="width:9%">ขนาด</th><th style="width:7%">หมวด</th><th style="width:6%">คงเหลือ</th><th style="width:6%">ขั้นต่ำ</th><th style="width:8%">มูลค่า(฿)</th><th style="width:6%">ใช้/วัน</th><th style="width:7%">ใช้/เดือน</th><th style="width:8%">พอใช้(เดือน)</th><th style="width:6%">สถานะ</th><th style="width:8%">จัดการ</th></tr></thead>
           <tbody id="stock-body"></tbody>
         </table></div>
