@@ -918,6 +918,7 @@ async function seedData(){
 function startListeners(){
   if('Notification' in window&&Notification.permission==='default'){Notification.requestPermission();}
   setSyncSt('load');
+  eqInit();
   unsubItems=db.collection('items').onSnapshot(function(snap){
     _allItems=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
         var needsSort=_allItems.filter(function(i){return i.sortOrder==null;});
@@ -2620,7 +2621,7 @@ var EQ_ST={available:'พร้อมใช้งาน','in-use':'กำลั�
 var EQ_STCL={available:'b-ok','in-use':'b-bl','in-repair':'b-am','pending-repair':'b-low',damaged:'b-co',lost:'b-iss',decommissioned:'b-adj'};
 var REP_ST={pending:'รอดำเนินการ','sent-out':'ส่งออกซ่อม','in-progress':'อยู่ระหว่างซ่อม','waiting-parts':'รอชิ้นส่วน',completed:'ซ่อมเสร็จ','beyond-repair':'เกินกำลังซ่อม',cancelled:'ยกเลิก'};
 
-(function eqInit(){
+function eqInit(){
   db.collection('equipment').orderBy('eqId').onSnapshot(function(s){
     _eq=s.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
     eqRenderDashboard();eqRenderList();eqRefreshSelects();
@@ -2642,7 +2643,7 @@ var REP_ST={pending:'รอดำเนินการ','sent-out':'ส่งอ
     _eqIns=s.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
     eqRenderInspections();eqRenderDashboard();
   });
-})();
+}
 
 function eqRenderDashboard(){
   var total=_eq.length,avail=0,inuse=0,repair=0,damaged=0,decomm=0;
