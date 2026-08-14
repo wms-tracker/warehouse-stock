@@ -156,7 +156,7 @@ tr:hover td{background:var(--surface2)}
   <div class="login-box">
     <h2>🔧 คลังอุปกรณ์</h2>
     <p>ระบบจัดการอุปกรณ์และครุภัณฑ์</p>
-    <div class="form-group"><label>อีเมล</label><input id="li-email" type="email" placeholder="user@example.com"></div>
+    <div class="form-group"><label>ชื่อผู้ใช้</label><input id="li-user" type="text" placeholder="username" autofocus></div>
     <div class="form-group"><label>รหัสผ่าน</label><input id="li-pass" type="password" placeholder="••••••••"></div>
     <div id="li-err" class="err-msg" style="display:none"></div>
     <button class="btn btn-primary btn-full" style="margin-top:8px" onclick="doLogin()">เข้าสู่ระบบ</button>
@@ -524,17 +524,28 @@ function can(action){
 
 /* ===== AUTH ===== */
 function doLogin(){
-  var em=document.getElementById('li-email').value.trim();
+  var u=document.getElementById('li-user').value.trim();
   var pw=document.getElementById('li-pass').value;
   var err=document.getElementById('li-err');
   err.style.display='none';
-  if(!em||!pw){err.textContent='กรุณากรอกข้อมูลให้ครบ';err.style.display='block';return;}
-  db.collection('users').where('email','==',em).limit(1).get().then(function(snap){
-    if(snap.empty){err.textContent='ไม่พบบัญชีนี้ในระบบ';err.style.display='block';return;}
-    var u=snap.docs[0].data();
-    if(u.password!==pw){err.textContent='รหัสผ่านไม่ถูกต้อง';err.style.display='block';return;}
-    _curUser=snap.docs[0].id;_curEmail=em;_curRole=u.role||'viewer';
-    startApp(u);
+  if(!u||!pw){err.textContent='กรุณากรอกข้อมูลให้ครบ';err.style.display='block';return;}
+  // Try by doc ID first
+  db.collection('users').doc(u).get().then(function(doc){
+    if(doc.exists){
+      var data=doc.data();
+      if(data.pass!==pw){err.textContent='รหัสผ่านไม่ถูกต้อง';err.style.display='block';return;}
+      _curUser=doc.id;_curEmail=data.email||u;_curRole=data.role||'staff';
+      startApp(data);
+    } else {
+      // fallback: search by id field
+      db.collection('users').where('id','==',u).limit(1).get().then(function(snap){
+        if(snap.empty){err.textContent='ไม่พบบัญชีนี้ในระบบ';err.style.display='block';return;}
+        var data=snap.docs[0].data();
+        if(data.pass!==pw){err.textContent='รหัสผ่านไม่ถูกต้อง';err.style.display='block';return;}
+        _curUser=snap.docs[0].id;_curEmail=data.email||u;_curRole=data.role||'staff';
+        startApp(data);
+      });
+    }
   }).catch(function(e){err.textContent='เกิดข้อผิดพลาด: '+e.message;err.style.display='block';});
 }
 function doLogout(){_curUser=null;_curEmail='';_curRole='viewer';document.getElementById('app').style.display='none';document.getElementById('login-screen').style.display='flex';}
@@ -1108,6 +1119,7 @@ function toggleTheme(){var cur=document.documentElement.getAttribute('data-theme
 if('Notification' in window&&Notification.permission==='default'){Notification.requestPermission();}
 
 // Enter key login
+document.getElementById('li-user').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('li-pass').focus();});
 document.getElementById('li-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 // Close modal on overlay click
 document.querySelectorAll('.modal-overlay').forEach(function(ov){ov.addEventListener('click',function(e){if(e.target===ov)ov.classList.remove('open');});});
