@@ -2696,6 +2696,7 @@ function eqRenderList(){
       +'<td style="white-space:nowrap">'+(isAdmin?'<button class="btn b-ghost b-sm" onclick="eqOpenForm(\''+e.id+'\')">แก้ไข</button> ':'')
       +'<button class="btn b-ghost b-sm" onclick="eqOpenCheckout(\''+e.id+'\')" '+(e.status==='available'?'':'disabled style="opacity:.4"')+'>ยืม</button> '
       +'<button class="btn b-ghost b-sm" onclick="eqOpenRepair(\''+e.id+'\')">แจ้งซ่อม</button>'
+      +(isAdmin?' <button class="btn b-ghost b-sm" style="color:var(--co)" onclick="eqDelete(\''+e.id+'\',\''+e.eqId+'\')">ลบ</button>':'')
       +'</td></tr>';
   }).join(''):'<tr><td colspan="7" class="empty">ไม่พบอุปกรณ์</td></tr>';
   var tb=document.getElementById('eq-list-tbody');if(tb)tb.innerHTML=html;
@@ -2753,6 +2754,11 @@ async function eqSaveForm(){
   }
   document.getElementById('eq-form-ov').style.display='none';
   toast('บันทึกสำเร็จ','success');
+}
+async function eqDelete(id,eqId){
+  if(!confirm('ลบอุปกรณ์ '+eqId+' ออกจากระบบ?\nการกระทำนี้ไม่สามารถย้อนกลับได้'))return;
+  await db.collection('equipment').doc(id).delete();
+  toast('ลบ '+eqId+' แล้ว','warn');
 }
 async function eqNextId(type){
   var nums=_eq.filter(function(e){return e.type===type;}).map(function(e){return parseInt((e.eqId||'').replace(type+'-',''))||0;});
