@@ -231,6 +231,12 @@ tbody tr:hover{background:var(--surface2)}
       <button class="nav-item" onclick="go('audit')">🔍 Audit Log</button>
       <button class="nav-item" id="nav-users" onclick="go('users')">👥 จัดการผู้ใช้</button>
       <button class="nav-item" id="nav-warehouse" onclick="go('warehouse')">🏭 จัดการคลัง</button>
+      <div class="nav-section">คลังอุปกรณ์</div>
+      <button class="nav-item" onclick="go('eq-dashboard')">📊 ภาพรวมอุปกรณ์</button>
+      <button class="nav-item" onclick="go('eq-list')">🔧 รายการอุปกรณ์</button>
+      <button class="nav-item" onclick="go('eq-checkout')">🔄 ยืม/คืน</button>
+      <button class="nav-item" onclick="go('eq-repair')">🔨 ซ่อมบำรุง</button>
+      <button class="nav-item" onclick="go('eq-inspect')">🔍 ตรวจสอบ</button>
     </div>
     <div class="main">
       <div id="alert-zone"></div>
@@ -549,6 +555,198 @@ tbody tr:hover{background:var(--surface2)}
     <div class="btn-row"><button class="btn b-bl" onclick="doTransfer()">🔄 โอนสินค้า</button></div>
   </div>
 </div>
+<!-- ===== EQUIPMENT PANELS ===== -->
+<div id="panel-eq-dashboard" class="panel">
+  <div class="page-title">📊 ภาพรวมอุปกรณ์</div>
+  <div class="page-sub">สรุปสถานะอุปกรณ์ทั้งหมดในคลัง</div>
+  <div id="eq-kpi-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:16px"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title" style="font-weight:700;margin-bottom:10px">แยกตามประเภท</div>
+    <div id="eq-type-summary"></div>
+  </div>
+  <div style="text-align:right"><button class="btn b-ghost b-sm" id="eq-seed-btn" onclick="eqSeed()" style="display:none">🌱 นำเข้าข้อมูลเริ่มต้น (60 รายการ)</button></div>
+</div>
+
+<div id="panel-eq-list" class="panel">
+  <div class="page-title">🔧 รายการอุปกรณ์</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+    <input id="eq-q" class="sr" style="flex:1;min-width:160px" placeholder="🔍 ค้นหาชื่อ/รหัส..." oninput="eqRenderList()">
+    <select id="eq-ft" class="sr" onchange="eqRenderList()"><option value="">ทุกประเภท</option></select>
+    <select id="eq-fs" class="sr" onchange="eqRenderList()">
+      <option value="">ทุกสถานะ</option>
+      <option value="available">พร้อมใช้</option>
+      <option value="in-use">กำลังใช้</option>
+      <option value="in-repair">ส่งซ่อม</option>
+      <option value="pending-repair">รอซ่อม</option>
+      <option value="damaged">ชำรุด</option>
+      <option value="lost">หาย</option>
+      <option value="decommissioned">ปลดระวาง</option>
+    </select>
+    <button class="btn b-pk b-sm" id="eq-add-btn" onclick="eqOpenForm()" style="display:none">+ เพิ่มอุปกรณ์</button>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>รหัส</th><th>ชื่ออุปกรณ์</th><th>ประเภท</th><th>สถานะ</th><th>ตำแหน่ง</th><th>ผู้รับผิดชอบ</th><th></th></tr></thead>
+    <tbody id="eq-list-tbody"></tbody>
+  </table></div>
+</div>
+
+<div id="panel-eq-checkout" class="panel">
+  <div class="page-title">🔄 ยืม/คืนอุปกรณ์</div>
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="btn b-bl b-sm eqco-tab active" onclick="eqCoTab('open',this)">ยืมอยู่</button>
+    <button class="btn b-ghost b-sm eqco-tab" onclick="eqCoTab('returned',this)">คืนแล้ว</button>
+    <button class="btn b-ghost b-sm eqco-tab" onclick="eqCoTab('all',this)">ทั้งหมด</button>
+    <button class="btn b-pk b-sm" style="margin-left:auto" onclick="eqOpenCheckout()">+ บันทึกการยืม</button>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>รหัสยืม</th><th>รหัสอุปกรณ์</th><th>ชื่ออุปกรณ์</th><th>ผู้ยืม</th><th>วันยืม</th><th>กำหนดคืน</th><th>สถานะ</th><th></th></tr></thead>
+    <tbody id="eq-co-tbody"></tbody>
+  </table></div>
+</div>
+
+<div id="panel-eq-repair" class="panel">
+  <div class="page-title">🔨 ซ่อมบำรุง</div>
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="btn b-am b-sm eqrep-tab active" onclick="eqRepTab('open',this)">ค้างซ่อม</button>
+    <button class="btn b-ghost b-sm eqrep-tab" onclick="eqRepTab('done',this)">เสร็จแล้ว</button>
+    <button class="btn b-ghost b-sm eqrep-tab" onclick="eqRepTab('all',this)">ทั้งหมด</button>
+    <button class="btn b-pk b-sm" style="margin-left:auto" onclick="eqOpenRepair()">+ แจ้งซ่อม</button>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>รหัสซ่อม</th><th>รหัสอุปกรณ์</th><th>ชื่ออุปกรณ์</th><th>ปัญหา</th><th>วันแจ้ง</th><th>สถานะ</th><th>ช่างซ่อม</th><th></th></tr></thead>
+    <tbody id="eq-rep-tbody"></tbody>
+  </table></div>
+</div>
+
+<div id="panel-eq-inspect" class="panel">
+  <div class="page-title">🔍 บันทึกการตรวจสอบ</div>
+  <div style="text-align:right;margin-bottom:12px">
+    <button class="btn b-pk b-sm" onclick="eqOpenInspect()">+ บันทึกตรวจสอบ</button>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>วันที่</th><th>รหัสอุปกรณ์</th><th>ชื่ออุปกรณ์</th><th>ผู้ตรวจ</th><th>ผล</th><th>ข้อบกพร่อง</th></tr></thead>
+    <tbody id="eq-ins-tbody"></tbody>
+  </table></div>
+</div>
+
+<!-- Equipment Form Modal -->
+<div class="modal-overlay" id="eq-form-ov" onclick="if(event.target===this)this.style.display='none'">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title" id="eq-form-title">เพิ่มอุปกรณ์</div><button class="modal-x" onclick="document.getElementById('eq-form-ov').style.display='none'">×</button></div>
+  <div class="modal-body" style="color:var(--text)">
+    <div class="g2">
+      <div class="fg"><label>ประเภท</label><select id="ef-type"><option value="COM">คอมพิวเตอร์</option><option value="MON">จอมอนิเตอร์</option><option value="PDA">เครื่อง PDA</option><option value="SCN">เครื่องสแกน</option><option value="PRT">เครื่องพิมพ์</option><option value="SPK">ลำโพง</option><option value="CCTV">กล้อง CCTV</option><option value="PKT">เครื่องพิมพ์สติ๊กเกอร์</option><option value="DSK">โต๊ะ</option><option value="CRT">รถเข็น</option><option value="HLT">รถยกไฟฟ้า</option></select></div>
+      <div class="fg"><label>ชื่ออุปกรณ์</label><input id="ef-name" placeholder="ชื่ออุปกรณ์"></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label>ยี่ห้อ/รุ่น</label><input id="ef-model" placeholder="รุ่น"></div>
+      <div class="fg"><label>รหัส S/N</label><input id="ef-serial" placeholder="Serial Number"></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label>ตำแหน่งที่ตั้ง</label><input id="ef-location" placeholder="เช่น คลังหลัก"></div>
+      <div class="fg"><label>ผู้รับผิดชอบ</label><input id="ef-owner" placeholder="ชื่อผู้รับผิดชอบ"></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label>วันที่ซื้อ</label><input id="ef-purchased" type="date"></div>
+      <div class="fg"><label>ราคา (บาท)</label><input id="ef-price" type="number" placeholder="0"></div>
+    </div>
+    <div id="ef-status-row" class="fg" style="display:none"><label>สถานะ</label><select id="ef-status"><option value="available">พร้อมใช้งาน</option><option value="in-use">กำลังใช้งาน</option><option value="in-repair">ส่งซ่อม</option><option value="pending-repair">รอซ่อม</option><option value="damaged">ชำรุด</option><option value="lost">หาย</option><option value="decommissioned">ปลดระวาง</option></select></div>
+    <div class="fg"><label>หมายเหตุ</label><textarea id="ef-note" rows="2"></textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn b-ghost" onclick="document.getElementById('eq-form-ov').style.display='none'">ยกเลิก</button>
+    <button class="btn b-pk" onclick="eqSaveForm()">บันทึก</button>
+  </div>
+</div></div>
+
+<!-- Checkout Modal -->
+<div class="modal-overlay" id="eq-co-ov" onclick="if(event.target===this)this.style.display='none'">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">บันทึกการยืม</div><button class="modal-x" onclick="document.getElementById('eq-co-ov').style.display='none'">×</button></div>
+  <div class="modal-body" style="color:var(--text)">
+    <div class="fg"><label>อุปกรณ์ (เฉพาะพร้อมใช้)</label><select id="eco-eq"></select></div>
+    <div class="g2">
+      <div class="fg"><label>ผู้ยืม</label><input id="eco-borrower" placeholder="ชื่อผู้ยืม"></div>
+      <div class="fg"><label>วัตถุประสงค์</label><input id="eco-purpose" placeholder="เหตุผล"></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label>วันที่ยืม</label><input id="eco-date" type="date"></div>
+      <div class="fg"><label>กำหนดคืน</label><input id="eco-due" type="date"></div>
+    </div>
+    <div class="fg"><label>หมายเหตุ</label><textarea id="eco-note" rows="2"></textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn b-ghost" onclick="document.getElementById('eq-co-ov').style.display='none'">ยกเลิก</button>
+    <button class="btn b-bl" onclick="eqSaveCheckout()">บันทึกการยืม</button>
+  </div>
+</div></div>
+
+<!-- Return Modal -->
+<div class="modal-overlay" id="eq-ret-ov" onclick="if(event.target===this)this.style.display='none'">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">บันทึกการคืน</div><button class="modal-x" onclick="document.getElementById('eq-ret-ov').style.display='none'">×</button></div>
+  <div class="modal-body" style="color:var(--text)">
+    <input type="hidden" id="eret-id">
+    <div class="fg"><label>สภาพเมื่อคืน</label><select id="eret-cond"><option value="ปกติ">ปกติ</option><option value="ชำรุดเล็กน้อย">ชำรุดเล็กน้อย</option><option value="ชำรุดมาก">ชำรุดมาก</option><option value="สูญหาย">สูญหาย</option></select></div>
+    <div class="fg"><label>หมายเหตุ</label><textarea id="eret-note" rows="2"></textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn b-ghost" onclick="document.getElementById('eq-ret-ov').style.display='none'">ยกเลิก</button>
+    <button class="btn b-tl" onclick="eqSaveReturn()">ยืนยันการคืน</button>
+  </div>
+</div></div>
+
+<!-- Repair Modal -->
+<div class="modal-overlay" id="eq-rep-ov" onclick="if(event.target===this)this.style.display='none'">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">แจ้งซ่อม</div><button class="modal-x" onclick="document.getElementById('eq-rep-ov').style.display='none'">×</button></div>
+  <div class="modal-body" style="color:var(--text)">
+    <div class="fg"><label>อุปกรณ์</label><select id="erep-eq"></select></div>
+    <div class="fg"><label>ปัญหาที่พบ</label><textarea id="erep-problem" rows="3" placeholder="อธิบายปัญหา..."></textarea></div>
+    <div class="g2">
+      <div class="fg"><label>ความเร่งด่วน</label><select id="erep-priority"><option value="ปกติ">ปกติ</option><option value="เร่งด่วน">เร่งด่วน</option><option value="ด่วนมาก">ด่วนมาก</option></select></div>
+      <div class="fg"><label>ช่างซ่อม</label><input id="erep-tech" placeholder="ชื่อช่าง (ถ้ามี)"></div>
+    </div>
+    <div class="fg"><label>หมายเหตุ</label><textarea id="erep-note" rows="2"></textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn b-ghost" onclick="document.getElementById('eq-rep-ov').style.display='none'">ยกเลิก</button>
+    <button class="btn b-am" onclick="eqSaveRepair()">บันทึกแจ้งซ่อม</button>
+  </div>
+</div></div>
+
+<!-- Repair Status Modal -->
+<div class="modal-overlay" id="eq-rsu-ov" onclick="if(event.target===this)this.style.display='none'">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">อัปเดตสถานะซ่อม</div><button class="modal-x" onclick="document.getElementById('eq-rsu-ov').style.display='none'">×</button></div>
+  <div class="modal-body" style="color:var(--text)">
+    <input type="hidden" id="ersu-id">
+    <div class="fg"><label>สถานะ</label><select id="ersu-status"><option value="pending">รอดำเนินการ</option><option value="sent-out">ส่งออกซ่อม</option><option value="in-progress">อยู่ระหว่างซ่อม</option><option value="waiting-parts">รอชิ้นส่วน</option><option value="completed">ซ่อมเสร็จ</option><option value="beyond-repair">เกินกำลังซ่อม</option><option value="cancelled">ยกเลิก</option></select></div>
+    <div class="fg"><label>ค่าซ่อม (บาท)</label><input id="ersu-cost" type="number" placeholder="0"></div>
+    <div class="fg"><label>หมายเหตุ</label><textarea id="ersu-note" rows="2"></textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn b-ghost" onclick="document.getElementById('eq-rsu-ov').style.display='none'">ยกเลิก</button>
+    <button class="btn b-pk" onclick="eqSaveRepairStatus()">บันทึก</button>
+  </div>
+</div></div>
+
+<!-- Inspect Modal -->
+<div class="modal-overlay" id="eq-ins-ov" onclick="if(event.target===this)this.style.display='none'">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">บันทึกการตรวจสอบ</div><button class="modal-x" onclick="document.getElementById('eq-ins-ov').style.display='none'">×</button></div>
+  <div class="modal-body" style="color:var(--text)">
+    <div class="fg"><label>อุปกรณ์</label><select id="eins-eq"></select></div>
+    <div class="fg"><label>ผลการตรวจ</label><select id="eins-result"><option value="ผ่าน">ผ่าน</option><option value="ผ่านแบบมีเงื่อนไข">ผ่านแบบมีเงื่อนไข</option><option value="ไม่ผ่าน">ไม่ผ่าน</option></select></div>
+    <div class="fg"><label>ข้อบกพร่อง</label><textarea id="eins-defect" rows="2" placeholder="ระบุถ้ามี"></textarea></div>
+    <div class="fg"><label>หมายเหตุ</label><textarea id="eins-note" rows="2"></textarea></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn b-ghost" onclick="document.getElementById('eq-ins-ov').style.display='none'">ยกเลิก</button>
+    <button class="btn b-bl" onclick="eqSaveInspect()">บันทึก</button>
+  </div>
+</div></div>
+
 <div id="panel-po" class="panel">
   <div class="page-title">ใบสั่งซื้อ (PO)</div>
   <div class="page-sub">ติดตามการสั่งซื้อจากซัพพลายเออร์ และบันทึกการรับสินค้าเข้า</div>
@@ -1207,7 +1405,7 @@ function mgDrop(e){
   });
 }
 function go(name){
-  var names=['stock','receive','issue','approve','history','report','manage','po','plan','trend','audit','users','warehouse'];
+  var names=['stock','receive','issue','approve','history','report','manage','po','plan','trend','audit','users','warehouse','eq-dashboard','eq-list','eq-checkout','eq-repair','eq-inspect'];
   document.querySelectorAll('.nav-item').forEach(function(t,i){t.classList.toggle('active',names[i]===name);});
   document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
   document.getElementById('panel-'+name).classList.add('active');
@@ -1221,6 +1419,11 @@ function go(name){
   if(name==='users')rUsers();
   if(name==='warehouse')rWarehouses();
   if(name==='po')rPO();
+  if(name==='eq-dashboard')eqRenderDashboard();
+  if(name==='eq-list')eqRenderList();
+  if(name==='eq-checkout')eqRenderCheckouts();
+  if(name==='eq-repair')eqRenderRepairs();
+  if(name==='eq-inspect')eqRenderInspections();
 }
 
 function toast(msg,type){
@@ -2407,6 +2610,311 @@ async function cancelPOFn(poId){
   toast('ยกเลิก PO แล้ว','warn');
   rPO();
 }
+
+// ===== EQUIPMENT MANAGEMENT =====
+var _eq=[],_eqCo=[],_eqRep=[],_eqIns=[];
+var _eqCoFilter='open',_eqRepFilter='open';
+var _eqEditId=null;
+var EQ_TYPES={COM:'คอมพิวเตอร์',MON:'จอมอนิเตอร์',PDA:'เครื่อง PDA',SCN:'เครื่องสแกน',PRT:'เครื่องพิมพ์',SPK:'ลำโพง',CCTV:'กล้อง CCTV',PKT:'เครื่องพิมพ์สติ๊กเกอร์',DSK:'โต๊ะ',CRT:'รถเข็น',HLT:'รถยกไฟฟ้า'};
+var EQ_ST={available:'พร้อมใช้งาน','in-use':'กำลังใช้งาน','in-repair':'ส่งซ่อม','pending-repair':'รอซ่อม',damaged:'ชำรุด',lost:'หาย',decommissioned:'ปลดระวาง'};
+var EQ_STCL={available:'b-ok','in-use':'b-bl','in-repair':'b-am','pending-repair':'b-low',damaged:'b-co',lost:'b-iss',decommissioned:'b-adj'};
+var REP_ST={pending:'รอดำเนินการ','sent-out':'ส่งออกซ่อม','in-progress':'อยู่ระหว่างซ่อม','waiting-parts':'รอชิ้นส่วน',completed:'ซ่อมเสร็จ','beyond-repair':'เกินกำลังซ่อม',cancelled:'ยกเลิก'};
+
+(function eqInit(){
+  db.collection('equipment').orderBy('eqId').onSnapshot(function(s){
+    _eq=s.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    eqRenderDashboard();eqRenderList();eqRefreshSelects();
+    var isAdmin=curUser&&curUser.role==='admin';
+    var sb=document.getElementById('eq-seed-btn');
+    if(sb)sb.style.display=isAdmin?'':'none';
+    var ab=document.getElementById('eq-add-btn');
+    if(ab)ab.style.display=isAdmin?'':'none';
+  });
+  db.collection('eq_checkouts').orderBy('createdAt','desc').onSnapshot(function(s){
+    _eqCo=s.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    eqRenderCheckouts();eqRenderDashboard();
+  });
+  db.collection('eq_repairs').orderBy('createdAt','desc').onSnapshot(function(s){
+    _eqRep=s.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    eqRenderRepairs();eqRenderDashboard();
+  });
+  db.collection('eq_inspections').orderBy('date','desc').onSnapshot(function(s){
+    _eqIns=s.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+    eqRenderInspections();eqRenderDashboard();
+  });
+})();
+
+function eqRenderDashboard(){
+  var total=_eq.length,avail=0,inuse=0,repair=0,damaged=0,decomm=0;
+  _eq.forEach(function(e){
+    if(e.status==='available')avail++;
+    else if(e.status==='in-use')inuse++;
+    else if(e.status==='in-repair'||e.status==='pending-repair')repair++;
+    else if(e.status==='damaged'||e.status==='lost')damaged++;
+    else if(e.status==='decommissioned')decomm++;
+  });
+  var openRep=_eqRep.filter(function(r){return r.status!=='completed'&&r.status!=='cancelled'&&r.status!=='beyond-repair';}).length;
+  var openCo=_eqCo.filter(function(c){return c.status==='borrowed';}).length;
+  var today=new Date().toISOString().substring(0,10);
+  var insToday=_eqIns.filter(function(i){return (i.date||'').substring(0,10)===today;}).length;
+  var rate=total>0?Math.round(avail/total*100):0;
+  var kpis=[
+    {label:'ทั้งหมด',val:total,col:''},
+    {label:'พร้อมใช้งาน',val:avail,col:'var(--tl)'},
+    {label:'กำลังใช้งาน',val:inuse,col:'var(--bl)'},
+    {label:'ส่งซ่อม',val:repair,col:'var(--am)'},
+    {label:'ชำรุด/หาย',val:damaged,col:'var(--co)'},
+    {label:'ปลดระวาง',val:decomm,col:'var(--muted)'},
+    {label:'ซ่อมค้างอยู่',val:openRep,col:''},
+    {label:'ยืมค้างอยู่',val:openCo,col:''},
+    {label:'ตรวจวันนี้',val:insToday,col:''},
+    {label:'อัตราพร้อมใช้',val:rate+'%',col:''}
+  ];
+  var g=document.getElementById('eq-kpi-grid');
+  if(g)g.innerHTML=kpis.map(function(k){return '<div class="stat-card"><div class="stat-label">'+k.label+'</div><div class="stat-val"'+(k.col?' style="color:'+k.col+'"':'')+'>'+k.val+'</div></div>';}).join('');
+  var byType={};_eq.forEach(function(e){byType[e.type]=(byType[e.type]||0)+1;});
+  var ts=document.getElementById('eq-type-summary');
+  if(ts)ts.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">'+Object.keys(EQ_TYPES).filter(function(k){return byType[k];}).map(function(k){return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px"><div style="font-size:12px;color:var(--muted)">'+EQ_TYPES[k]+'</div><div style="font-size:20px;font-weight:700">'+byType[k]+'</div></div>';}).join('')+'</div>';
+}
+
+function eqRenderList(){
+  var q=(document.getElementById('eq-q')||{}).value||'';
+  var ft=(document.getElementById('eq-ft')||{}).value||'';
+  var fs=(document.getElementById('eq-fs')||{}).value||'';
+  var list=_eq.filter(function(e){
+    if(ft&&e.type!==ft)return false;
+    if(fs&&e.status!==fs)return false;
+    if(q&&!(e.eqId+' '+(e.name||'')+(e.serial||'')).toLowerCase().includes(q.toLowerCase()))return false;
+    return true;
+  });
+  var isAdmin=curUser&&curUser.role==='admin';
+  var html=list.length?list.map(function(e){
+    return '<tr><td><b style="font-family:monospace;font-size:12px">'+e.eqId+'</b></td><td>'+esc(e.name||'')+'</td><td>'+(EQ_TYPES[e.type]||e.type||'')+'</td>'
+      +'<td><span class="badge '+(EQ_STCL[e.status]||'')+'">'+(EQ_ST[e.status]||e.status||'')+'</span></td>'
+      +'<td>'+esc(e.location||'–')+'</td><td>'+esc(e.owner||'–')+'</td>'
+      +'<td style="white-space:nowrap">'+(isAdmin?'<button class="btn b-ghost b-sm" onclick="eqOpenForm(\''+e.id+'\')">แก้ไข</button> ':'')
+      +'<button class="btn b-ghost b-sm" onclick="eqOpenCheckout(\''+e.id+'\')" '+(e.status==='available'?'':'disabled style="opacity:.4"')+'>ยืม</button> '
+      +'<button class="btn b-ghost b-sm" onclick="eqOpenRepair(\''+e.id+'\')">แจ้งซ่อม</button>'
+      +'</td></tr>';
+  }).join(''):'<tr><td colspan="7" class="empty">ไม่พบอุปกรณ์</td></tr>';
+  var tb=document.getElementById('eq-list-tbody');if(tb)tb.innerHTML=html;
+  // update type filter
+  var ft2=document.getElementById('eq-ft');
+  if(ft2){var cur=ft2.value,types=[...new Set(_eq.map(function(e){return e.type;}))].sort();
+    ft2.innerHTML='<option value="">ทุกประเภท</option>'+types.map(function(t){return '<option value="'+t+'"'+(t===cur?' selected':'')+'>'+((EQ_TYPES[t])||t)+'</option>';}).join('');}
+}
+
+function eqRefreshSelects(){
+  var avail=_eq.filter(function(e){return e.status==='available';});
+  var all=_eq.filter(function(e){return e.status!=='decommissioned';});
+  var coSel=document.getElementById('eco-eq');
+  if(coSel)coSel.innerHTML='<option value="">-- เลือกอุปกรณ์ --</option>'+avail.map(function(e){return '<option value="'+e.id+'">'+e.eqId+' – '+esc(e.name||'')+'</option>';}).join('');
+  ['erep-eq','eins-eq'].forEach(function(id){
+    var s=document.getElementById(id);if(!s)return;
+    s.innerHTML='<option value="">-- เลือกอุปกรณ์ --</option>'+all.map(function(e){return '<option value="'+e.id+'">'+e.eqId+' – '+esc(e.name||'')+'</option>';}).join('');
+  });
+}
+
+function eqOpenForm(id){
+  _eqEditId=id||null;
+  var eq=id?_eq.find(function(e){return e.id===id;}):null;
+  var t=document.getElementById('eq-form-title');if(t)t.textContent=eq?'แก้ไขอุปกรณ์':'เพิ่มอุปกรณ์';
+  if(eq){
+    document.getElementById('ef-type').value=eq.type||'COM';
+    document.getElementById('ef-name').value=eq.name||'';
+    document.getElementById('ef-model').value=eq.model||'';
+    document.getElementById('ef-serial').value=eq.serial||'';
+    document.getElementById('ef-location').value=eq.location||'';
+    document.getElementById('ef-owner').value=eq.owner||'';
+    document.getElementById('ef-purchased').value=eq.purchasedDate||'';
+    document.getElementById('ef-price').value=eq.price||'';
+    document.getElementById('ef-note').value=eq.note||'';
+    document.getElementById('ef-status').value=eq.status||'available';
+    document.getElementById('ef-status-row').style.display='';
+  } else {
+    ['ef-name','ef-model','ef-serial','ef-location','ef-owner','ef-purchased','ef-price','ef-note'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('ef-status-row').style.display='none';
+  }
+  document.getElementById('eq-form-ov').style.display='flex';
+}
+async function eqSaveForm(){
+  var name=document.getElementById('ef-name').value.trim();
+  var type=document.getElementById('ef-type').value;
+  if(!name){toast('กรุณากรอกชื่ออุปกรณ์','error');return;}
+  var data={name:name,type:type,model:document.getElementById('ef-model').value.trim(),serial:document.getElementById('ef-serial').value.trim(),location:document.getElementById('ef-location').value.trim(),owner:document.getElementById('ef-owner').value.trim(),purchasedDate:document.getElementById('ef-purchased').value,price:Number(document.getElementById('ef-price').value)||0,note:document.getElementById('ef-note').value.trim(),updatedAt:new Date().toISOString()};
+  if(_eqEditId){
+    data.status=document.getElementById('ef-status').value;
+    await db.collection('equipment').doc(_eqEditId).update(data);
+  } else {
+    data.status='available';data.createdAt=new Date().toISOString();
+    data.eqId=await eqNextId(type);
+    await db.collection('equipment').add(data);
+  }
+  document.getElementById('eq-form-ov').style.display='none';
+  toast('บันทึกสำเร็จ','success');
+}
+async function eqNextId(type){
+  var nums=_eq.filter(function(e){return e.type===type;}).map(function(e){return parseInt((e.eqId||'').replace(type+'-',''))||0;});
+  var max=nums.length?Math.max.apply(null,nums):0;
+  return type+'-'+String(max+1).padStart(3,'0');
+}
+
+// CHECKOUT
+function eqOpenCheckout(eqId){
+  eqRefreshSelects();
+  if(eqId)document.getElementById('eco-eq').value=eqId;
+  var today=new Date().toISOString().substring(0,10);
+  document.getElementById('eco-date').value=today;
+  var due=new Date();due.setDate(due.getDate()+7);
+  document.getElementById('eco-due').value=due.toISOString().substring(0,10);
+  ['eco-borrower','eco-purpose','eco-note'].forEach(function(id){document.getElementById(id).value='';});
+  document.getElementById('eq-co-ov').style.display='flex';
+}
+async function eqSaveCheckout(){
+  var eqDocId=document.getElementById('eco-eq').value;
+  var borrower=document.getElementById('eco-borrower').value.trim();
+  if(!eqDocId||!borrower){toast('กรุณาเลือกอุปกรณ์และระบุผู้ยืม','error');return;}
+  var eq=_eq.find(function(e){return e.id===eqDocId;});if(!eq)return;
+  var snap=await db.collection('eq_checkouts').orderBy('createdAt','desc').limit(1).get();
+  var last=snap.empty?0:parseInt((snap.docs[0].data().coId||'').replace('CHK-',''))||0;
+  var coId='CHK-'+String(last+1).padStart(4,'0');
+  await db.collection('eq_checkouts').add({coId:coId,eqDocId:eqDocId,eqId:eq.eqId,eqName:eq.name,borrower:borrower,purpose:document.getElementById('eco-purpose').value.trim(),borrowDate:document.getElementById('eco-date').value,dueDate:document.getElementById('eco-due').value,note:document.getElementById('eco-note').value.trim(),status:'borrowed',createdAt:new Date().toISOString(),createdBy:curUser?curUser.id:''});
+  await db.collection('equipment').doc(eqDocId).update({status:'in-use'});
+  document.getElementById('eq-co-ov').style.display='none';
+  toast('บันทึกการยืม: '+coId,'success');
+}
+function eqCoTab(f,btn){_eqCoFilter=f;document.querySelectorAll('.eqco-tab').forEach(function(t){t.className='btn b-ghost b-sm eqco-tab';});btn.className='btn b-bl b-sm eqco-tab active';eqRenderCheckouts();}
+function eqRenderCheckouts(){
+  var list=_eqCo.filter(function(c){if(_eqCoFilter==='open')return c.status==='borrowed';if(_eqCoFilter==='returned')return c.status==='returned';return true;});
+  var today=new Date().toISOString().substring(0,10);
+  var html=list.length?list.map(function(c){
+    var over=c.status==='borrowed'&&c.dueDate&&c.dueDate<today;
+    return '<tr><td><b style="font-family:monospace;font-size:12px">'+esc(c.coId||'')+'</b></td><td>'+esc(c.eqId||'')+'</td><td>'+esc(c.eqName||'')+'</td><td>'+esc(c.borrower||'')+'</td><td>'+esc(c.borrowDate||'')+'</td>'
+      +'<td>'+(over?'<b style="color:var(--co)">':'')+esc(c.dueDate||'')+(over?'</b> ⚠':'')+'</td>'
+      +'<td>'+(c.status==='borrowed'?'<span class="badge b-bl">ยืมอยู่</span>':'<span class="badge b-ok">คืนแล้ว</span>')+'</td>'
+      +'<td>'+(c.status==='borrowed'?'<button class="btn b-tl b-sm" onclick="eqOpenReturn(\''+c.id+'\')">คืน</button>':'')+'</td></tr>';
+  }).join(''):'<tr><td colspan="8" class="empty">ไม่มีรายการ</td></tr>';
+  var tb=document.getElementById('eq-co-tbody');if(tb)tb.innerHTML=html;
+}
+function eqOpenReturn(coId){document.getElementById('eret-id').value=coId;document.getElementById('eret-note').value='';document.getElementById('eq-ret-ov').style.display='flex';}
+async function eqSaveReturn(){
+  var coId=document.getElementById('eret-id').value;
+  var co=_eqCo.find(function(c){return c.id===coId;});if(!co)return;
+  var cond=document.getElementById('eret-cond').value;
+  var newSt=cond==='สูญหาย'?'lost':cond==='ชำรุดมาก'?'damaged':cond==='ชำรุดเล็กน้อย'?'pending-repair':'available';
+  await db.collection('eq_checkouts').doc(coId).update({status:'returned',returnDate:new Date().toISOString().substring(0,10),returnCondition:cond,returnNote:document.getElementById('eret-note').value.trim()});
+  await db.collection('equipment').doc(co.eqDocId).update({status:newSt});
+  document.getElementById('eq-ret-ov').style.display='none';
+  toast('บันทึกการคืนสำเร็จ','success');
+  if(newSt!=='available')toast('⚠ อุปกรณ์ '+(co.eqName||co.eqId)+' สภาพ: '+cond,'warn');
+}
+
+// REPAIR
+function eqOpenRepair(eqId){
+  eqRefreshSelects();
+  if(eqId)document.getElementById('erep-eq').value=eqId;
+  ['erep-problem','erep-tech','erep-note'].forEach(function(id){document.getElementById(id).value='';});
+  document.getElementById('eq-rep-ov').style.display='flex';
+}
+async function eqSaveRepair(){
+  var eqDocId=document.getElementById('erep-eq').value;
+  var problem=document.getElementById('erep-problem').value.trim();
+  if(!eqDocId||!problem){toast('กรุณาเลือกอุปกรณ์และระบุปัญหา','error');return;}
+  var eq=_eq.find(function(e){return e.id===eqDocId;});if(!eq)return;
+  var snap=await db.collection('eq_repairs').orderBy('createdAt','desc').limit(1).get();
+  var last=snap.empty?0:parseInt((snap.docs[0].data().repId||'').replace('REP-',''))||0;
+  var repId='REP-'+String(last+1).padStart(4,'0');
+  await db.collection('eq_repairs').add({repId:repId,eqDocId:eqDocId,eqId:eq.eqId,eqName:eq.name,problem:problem,priority:document.getElementById('erep-priority').value,technician:document.getElementById('erep-tech').value.trim(),note:document.getElementById('erep-note').value.trim(),status:'pending',createdAt:new Date().toISOString(),createdBy:curUser?curUser.id:''});
+  await db.collection('equipment').doc(eqDocId).update({status:'pending-repair'});
+  document.getElementById('eq-rep-ov').style.display='none';
+  toast('บันทึกแจ้งซ่อม: '+repId,'success');
+}
+function eqRepTab(f,btn){_eqRepFilter=f;document.querySelectorAll('.eqrep-tab').forEach(function(t){t.className='btn b-ghost b-sm eqrep-tab';});btn.className='btn b-am b-sm eqrep-tab active';eqRenderRepairs();}
+function eqRenderRepairs(){
+  var done=['completed','beyond-repair','cancelled'];
+  var list=_eqRep.filter(function(r){if(_eqRepFilter==='open')return!done.includes(r.status);if(_eqRepFilter==='done')return done.includes(r.status);return true;});
+  var html=list.length?list.map(function(r){
+    var sc=r.status==='completed'?'b-ok':r.status==='pending'?'b-low':'b-am';
+    return '<tr><td><b style="font-family:monospace;font-size:12px">'+esc(r.repId||'')+'</b></td><td>'+esc(r.eqId||'')+'</td><td>'+esc(r.eqName||'')+'</td><td>'+esc(r.problem||'')+'</td><td>'+(r.createdAt||'').substring(0,10)+'</td>'
+      +'<td><span class="badge '+sc+'">'+(REP_ST[r.status]||r.status)+'</span></td><td>'+esc(r.technician||'–')+'</td>'
+      +'<td><button class="btn b-ghost b-sm" onclick="eqOpenRepairStatus(\''+r.id+'\')">อัปเดต</button></td></tr>';
+  }).join(''):'<tr><td colspan="8" class="empty">ไม่มีรายการ</td></tr>';
+  var tb=document.getElementById('eq-rep-tbody');if(tb)tb.innerHTML=html;
+}
+function eqOpenRepairStatus(id){
+  var r=_eqRep.find(function(x){return x.id===id;});if(!r)return;
+  document.getElementById('ersu-id').value=id;
+  document.getElementById('ersu-status').value=r.status||'pending';
+  document.getElementById('ersu-cost').value=r.cost||'';
+  document.getElementById('ersu-note').value='';
+  document.getElementById('eq-rsu-ov').style.display='flex';
+}
+async function eqSaveRepairStatus(){
+  var id=document.getElementById('ersu-id').value;
+  var r=_eqRep.find(function(x){return x.id===id;});if(!r)return;
+  var status=document.getElementById('ersu-status').value;
+  await db.collection('eq_repairs').doc(id).update({status:status,cost:Number(document.getElementById('ersu-cost').value)||0,statusNote:document.getElementById('ersu-note').value.trim(),updatedAt:new Date().toISOString()});
+  var newEqSt=status==='completed'?'available':status==='beyond-repair'?'damaged':['sent-out','in-progress','waiting-parts'].includes(status)?'in-repair':null;
+  if(newEqSt&&r.eqDocId)await db.collection('equipment').doc(r.eqDocId).update({status:newEqSt});
+  document.getElementById('eq-rsu-ov').style.display='none';
+  toast('อัปเดตสถานะซ่อมแล้ว','success');
+}
+
+// INSPECT
+function eqOpenInspect(eqId){
+  eqRefreshSelects();
+  if(eqId)document.getElementById('eins-eq').value=eqId;
+  ['eins-defect','eins-note'].forEach(function(id){document.getElementById(id).value='';});
+  document.getElementById('eq-ins-ov').style.display='flex';
+}
+async function eqSaveInspect(){
+  var eqDocId=document.getElementById('eins-eq').value;
+  if(!eqDocId){toast('กรุณาเลือกอุปกรณ์','error');return;}
+  var eq=_eq.find(function(e){return e.id===eqDocId;});if(!eq)return;
+  var result=document.getElementById('eins-result').value;
+  await db.collection('eq_inspections').add({eqId:eqDocId,eqCode:eq.eqId,eqName:eq.name,result:result,defect:document.getElementById('eins-defect').value.trim(),note:document.getElementById('eins-note').value.trim(),inspector:curUser?curUser.id:'',date:new Date().toISOString(),createdAt:new Date().toISOString()});
+  await db.collection('equipment').doc(eqDocId).update({lastInspected:new Date().toISOString()});
+  if(result==='ไม่ผ่าน')await db.collection('equipment').doc(eqDocId).update({status:'pending-repair'});
+  document.getElementById('eq-ins-ov').style.display='none';
+  toast('บันทึกการตรวจสอบแล้ว','success');
+}
+function eqRenderInspections(){
+  var html=_eqIns.length?_eqIns.slice(0,100).map(function(i){
+    var rc=i.result==='ผ่าน'?'b-ok':i.result==='ไม่ผ่าน'?'b-co':'b-am';
+    return '<tr><td>'+(i.date||'').substring(0,10)+'</td><td>'+esc(i.eqCode||'')+'</td><td>'+esc(i.eqName||'')+'</td><td>'+esc(i.inspector||'')+'</td><td><span class="badge '+rc+'">'+esc(i.result||'')+'</span></td><td>'+esc(i.defect||i.note||'–')+'</td></tr>';
+  }).join(''):'<tr><td colspan="6" class="empty">ยังไม่มีบันทึก</td></tr>';
+  var tb=document.getElementById('eq-ins-tbody');if(tb)tb.innerHTML=html;
+}
+
+// SEED
+var EQ_SEED=[
+  {type:'COM',name:'คอมพิวเตอร์ตั้งโต๊ะ',model:'Lenovo ThinkCentre',n:6},
+  {type:'MON',name:'จอมอนิเตอร์',model:'Dell 24"',n:5},
+  {type:'PDA',name:'เครื่อง PDA',model:'Zebra TC52',n:5},
+  {type:'SCN',name:'เครื่องสแกนบาร์โค้ด',model:'Honeywell Xenon',n:7},
+  {type:'PRT',name:'เครื่องพิมพ์',model:'HP LaserJet',n:2},
+  {type:'SPK',name:'ลำโพง',model:'Logitech Z200',n:6},
+  {type:'CCTV',name:'กล้อง CCTV',model:'Hikvision 4MP',n:6},
+  {type:'PKT',name:'เครื่องพิมพ์สติ๊กเกอร์',model:'Zebra ZQ521',n:6},
+  {type:'DSK',name:'โต๊ะทำงาน',model:'Standing Desk',n:1},
+  {type:'CRT',name:'รถเข็น',model:'Hand Truck Steel',n:5},
+  {type:'HLT',name:'รถยกไฟฟ้า',model:'Toyota Electric Pallet',n:11}
+];
+async function eqSeed(){
+  if(!curUser||curUser.role!=='admin'){toast('เฉพาะ Admin เท่านั้น','error');return;}
+  if(_eq.length>0&&!confirm('มีอุปกรณ์ '+_eq.length+' รายการอยู่แล้ว ต้องการเพิ่มข้อมูลเริ่มต้นอีกหรือไม่?'))return;
+  var count=0;
+  for(var g=0;g<EQ_SEED.length;g++){
+    var grp=EQ_SEED[g];
+    for(var i=1;i<=grp.n;i++){
+      var eqId=await eqNextId(grp.type);
+      await db.collection('equipment').add({eqId:eqId,type:grp.type,name:grp.name,model:grp.model,serial:'',location:'คลังอุปกรณ์',owner:'',status:'available',createdAt:new Date().toISOString(),note:''});
+      count++;
+    }
+  }
+  toast('นำเข้าข้อมูลเริ่มต้น '+count+' รายการ','success');
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 function toggleTheme(){
   var cur=document.documentElement.getAttribute('data-theme');
